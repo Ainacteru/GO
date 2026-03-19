@@ -30,6 +30,7 @@ endif
 # List the subdirectories for creating object files
 SUB_DIRS +=  \
  \
+hpl/tc \
 samd21a/gcc/gcc \
 hpl/dmac \
 hal/src \
@@ -37,6 +38,7 @@ samd21a/gcc \
 hpl/pm \
 hpl/sysctrl \
 hal/utils/src \
+hpl/sercom \
 examples \
 hpl/gclk \
 hpl/core
@@ -46,10 +48,13 @@ OBJS +=  \
 hal/src/hal_io.o \
 samd21a/gcc/gcc/startup_samd21.o \
 hal/utils/src/utils_syscalls.o \
+hal/src/hal_spi_m_sync.o \
+hal/src/hal_pwm.o \
+hal/src/hal_i2c_m_sync.o \
 hal/src/hal_delay.o \
 hpl/pm/hpl_pm.o \
 hpl/core/hpl_init.o \
-samd21a/gcc/system_samd21.o \
+hal/utils/src/utils_list.o \
 hpl/core/hpl_core_m0plus_base.o \
 hal/utils/src/utils_assert.o \
 hpl/dmac/hpl_dmac.o \
@@ -57,23 +62,28 @@ hpl/sysctrl/hpl_sysctrl.o \
 hpl/gclk/hpl_gclk.o \
 hal/src/hal_init.o \
 main.o \
-hal/utils/src/utils_list.o \
+samd21a/gcc/system_samd21.o \
 examples/driver_examples.o \
 driver_init.o \
+hpl/sercom/hpl_sercom.o \
 hal/src/hal_gpio.o \
 hal/utils/src/utils_event.o \
 hal/src/hal_sleep.o \
 atmel_start.o \
+hpl/tc/hpl_tc.o \
 hal/src/hal_atomic.o
 
 OBJS_AS_ARGS +=  \
 "hal/src/hal_io.o" \
 "samd21a/gcc/gcc/startup_samd21.o" \
 "hal/utils/src/utils_syscalls.o" \
+"hal/src/hal_spi_m_sync.o" \
+"hal/src/hal_pwm.o" \
+"hal/src/hal_i2c_m_sync.o" \
 "hal/src/hal_delay.o" \
 "hpl/pm/hpl_pm.o" \
 "hpl/core/hpl_init.o" \
-"samd21a/gcc/system_samd21.o" \
+"hal/utils/src/utils_list.o" \
 "hpl/core/hpl_core_m0plus_base.o" \
 "hal/utils/src/utils_assert.o" \
 "hpl/dmac/hpl_dmac.o" \
@@ -81,13 +91,15 @@ OBJS_AS_ARGS +=  \
 "hpl/gclk/hpl_gclk.o" \
 "hal/src/hal_init.o" \
 "main.o" \
-"hal/utils/src/utils_list.o" \
+"samd21a/gcc/system_samd21.o" \
 "examples/driver_examples.o" \
 "driver_init.o" \
+"hpl/sercom/hpl_sercom.o" \
 "hal/src/hal_gpio.o" \
 "hal/utils/src/utils_event.o" \
 "hal/src/hal_sleep.o" \
 "atmel_start.o" \
+"hpl/tc/hpl_tc.o" \
 "hal/src/hal_atomic.o"
 
 # List the directories containing header files
@@ -102,7 +114,9 @@ DIR_INCLUDES +=  \
 -I"../hpl/gclk" \
 -I"../hpl/pm" \
 -I"../hpl/port" \
+-I"../hpl/sercom" \
 -I"../hpl/sysctrl" \
+-I"../hpl/tc" \
 -I"../hri" \
 -I"../" \
 -I"../CMSIS/Core/Include" \
@@ -116,6 +130,9 @@ DEPS_AS_ARGS +=  \
 "hal/src/hal_gpio.d" \
 "hal/src/hal_io.d" \
 "hal/utils/src/utils_syscalls.d" \
+"hal/src/hal_i2c_m_sync.d" \
+"hal/src/hal_pwm.d" \
+"hal/src/hal_spi_m_sync.d" \
 "hpl/core/hpl_core_m0plus_base.d" \
 "hal/utils/src/utils_list.d" \
 "hpl/dmac/hpl_dmac.d" \
@@ -130,8 +147,10 @@ DEPS_AS_ARGS +=  \
 "main.d" \
 "examples/driver_examples.d" \
 "hal/src/hal_sleep.d" \
+"hpl/sercom/hpl_sercom.d" \
 "hal/utils/src/utils_event.d" \
 "hal/src/hal_atomic.d" \
+"hpl/tc/hpl_tc.d" \
 "hpl/pm/hpl_pm.d" \
 "atmel_start.d"
 
