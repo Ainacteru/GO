@@ -7,9 +7,5 @@ int main(void)
 
 	/* Replace with your application code */
 	while (1) {
-		gpio_toggle_pin_level(RGB_GREEN);
-
-		delay_ms(500);
-		
 	}
 }
