@@ -113,19 +113,27 @@ void SPI_0_init(void)
 
 void PWM_0_PORT_init(void)
 {
+
+	gpio_set_pin_function(SERVO_2, PINMUX_PA18F_TCC0_WO2);
+
+	gpio_set_pin_function(SERVO_3, PINMUX_PA19F_TCC0_WO3);
+
+	gpio_set_pin_function(SERVO_1, PINMUX_PA16F_TCC0_WO6);
+
+	gpio_set_pin_function(BUZZER, PINMUX_PA13F_TCC0_WO7);
 }
 
 void PWM_0_CLOCK_init(void)
 {
-	_pm_enable_bus_clock(PM_BUS_APBC, TC3);
-	_gclk_enable_channel(TC3_GCLK_ID, CONF_GCLK_TC3_SRC);
+	_pm_enable_bus_clock(PM_BUS_APBC, TCC0);
+	_gclk_enable_channel(TCC0_GCLK_ID, CONF_GCLK_TCC0_SRC);
 }
 
 void PWM_0_init(void)
 {
 	PWM_0_CLOCK_init();
 	PWM_0_PORT_init();
-	pwm_init(&PWM_0, TC3, _tc_get_pwm());
+	pwm_init(&PWM_0, TCC0, _tcc_get_pwm());
 }
 
 void system_init(void)
@@ -247,20 +255,6 @@ void system_init(void)
 
 	gpio_set_pin_function(SD_DETECT, GPIO_PIN_FUNCTION_OFF);
 
-	// GPIO on PA13
-
-	gpio_set_pin_level(BUZZER,
-	                   // <y> Initial level
-	                   // <id> pad_initial_level
-	                   // <false"> Low
-	                   // <true"> High
-	                   false);
-
-	// Set pin direction to output
-	gpio_set_pin_direction(BUZZER, GPIO_DIRECTION_OUT);
-
-	gpio_set_pin_function(BUZZER, GPIO_PIN_FUNCTION_OFF);
-
 	// GPIO on PA14
 
 	gpio_set_pin_level(SD_CS,
@@ -290,20 +284,6 @@ void system_init(void)
 
 	gpio_set_pin_function(BMP_INT, GPIO_PIN_FUNCTION_OFF);
 
-	// GPIO on PA16
-
-	gpio_set_pin_level(SERVO_1,
-	                   // <y> Initial level
-	                   // <id> pad_initial_level
-	                   // <false"> Low
-	                   // <true"> High
-	                   false);
-
-	// Set pin direction to output
-	gpio_set_pin_direction(SERVO_1, GPIO_DIRECTION_OUT);
-
-	gpio_set_pin_function(SERVO_1, GPIO_PIN_FUNCTION_OFF);
-
 	// GPIO on PA17
 
 	gpio_set_pin_level(FLASH_CS,
@@ -317,34 +297,6 @@ void system_init(void)
 	gpio_set_pin_direction(FLASH_CS, GPIO_DIRECTION_OUT);
 
 	gpio_set_pin_function(FLASH_CS, GPIO_PIN_FUNCTION_OFF);
-
-	// GPIO on PA18
-
-	gpio_set_pin_level(SERVO_2,
-	                   // <y> Initial level
-	                   // <id> pad_initial_level
-	                   // <false"> Low
-	                   // <true"> High
-	                   false);
-
-	// Set pin direction to output
-	gpio_set_pin_direction(SERVO_2, GPIO_DIRECTION_OUT);
-
-	gpio_set_pin_function(SERVO_2, GPIO_PIN_FUNCTION_OFF);
-
-	// GPIO on PA19
-
-	gpio_set_pin_level(SERVO_3,
-	                   // <y> Initial level
-	                   // <id> pad_initial_level
-	                   // <false"> Low
-	                   // <true"> High
-	                   false);
-
-	// Set pin direction to output
-	gpio_set_pin_direction(SERVO_3, GPIO_DIRECTION_OUT);
-
-	gpio_set_pin_function(SERVO_3, GPIO_PIN_FUNCTION_OFF);
 
 	// GPIO on PA21
 

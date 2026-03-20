@@ -30,9 +30,9 @@ endif
 # List the subdirectories for creating object files
 SUB_DIRS +=  \
  \
-hpl/tc \
 samd21a/gcc/gcc \
 hpl/dmac \
+hpl/tcc \
 hal/src \
 samd21a/gcc \
 hpl/pm \
@@ -69,8 +69,8 @@ hpl/sercom/hpl_sercom.o \
 hal/src/hal_gpio.o \
 hal/utils/src/utils_event.o \
 hal/src/hal_sleep.o \
+hpl/tcc/hpl_tcc.o \
 atmel_start.o \
-hpl/tc/hpl_tc.o \
 hal/src/hal_atomic.o \
 led.o
 
@@ -99,8 +99,8 @@ OBJS_AS_ARGS +=  \
 "hal/src/hal_gpio.o" \
 "hal/utils/src/utils_event.o" \
 "hal/src/hal_sleep.o" \
+"hpl/tcc/hpl_tcc.o" \
 "atmel_start.o" \
-"hpl/tc/hpl_tc.o" \
 "hal/src/hal_atomic.o" \
 "led.o"
 
@@ -118,7 +118,7 @@ DIR_INCLUDES +=  \
 -I"../hpl/port" \
 -I"../hpl/sercom" \
 -I"../hpl/sysctrl" \
--I"../hpl/tc" \
+-I"../hpl/tcc" \
 -I"../hri" \
 -I"../" \
 -I"../CMSIS/Core/Include" \
@@ -152,10 +152,9 @@ DEPS_AS_ARGS +=  \
 "hpl/sercom/hpl_sercom.d" \
 "hal/utils/src/utils_event.d" \
 "hal/src/hal_atomic.d" \
-"hpl/tc/hpl_tc.d" \
 "hpl/pm/hpl_pm.d" \
-"atmel_start.d" \
-"led.d"
+"hpl/tcc/hpl_tcc.d" \
+"atmel_start.d"
 
 OUTPUT_FILE_NAME :=AtmelStart
 QUOTE := "

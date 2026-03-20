@@ -147,8 +147,8 @@
         <file category="header" condition="ARMCC, GCC, IAR" name="hpl/port/hpl_gpio_base.h"/>
         <file category="source" condition="ARMCC, GCC, IAR" name="hpl/sercom/hpl_sercom.c"/>
         <file category="source" condition="ARMCC, GCC, IAR" name="hpl/sysctrl/hpl_sysctrl.c"/>
-        <file category="source" condition="ARMCC, GCC, IAR" name="hpl/tc/hpl_tc.c"/>
-        <file category="header" condition="ARMCC, GCC, IAR" name="hpl/tc/hpl_tc_base.h"/>
+        <file category="source" condition="ARMCC, GCC, IAR" name="hpl/tcc/hpl_tcc.c"/>
+        <file category="header" condition="ARMCC, GCC, IAR" name="hpl/tcc/hpl_tcc.h"/>
         <file category="header" condition="ARMCC, GCC, IAR" name="atmel_start.h"/>
         <file category="source" condition="ARMCC, GCC, IAR" name="atmel_start.c"/>
         <file attr="config" category="header" condition="ARMCC, GCC, IAR" name="config/hpl_dmac_config.h"/>
@@ -156,7 +156,7 @@
         <file attr="config" category="header" condition="ARMCC, GCC, IAR" name="config/hpl_pm_config.h"/>
         <file attr="config" category="header" condition="ARMCC, GCC, IAR" name="config/hpl_sercom_config.h"/>
         <file attr="config" category="header" condition="ARMCC, GCC, IAR" name="config/hpl_sysctrl_config.h"/>
-        <file attr="config" category="header" condition="ARMCC, GCC, IAR" name="config/hpl_tc_config.h"/>
+        <file attr="config" category="header" condition="ARMCC, GCC, IAR" name="config/hpl_tcc_config.h"/>
         <file attr="config" category="header" condition="ARMCC, GCC, IAR" name="config/peripheral_clk_config.h"/>
         <file category="include" condition="ARMCC, GCC, IAR" name=""/>
         <file category="include" condition="ARMCC, GCC, IAR" name="config"/>
@@ -170,7 +170,7 @@
         <file category="include" condition="ARMCC, GCC, IAR" name="hpl/port"/>
         <file category="include" condition="ARMCC, GCC, IAR" name="hpl/sercom"/>
         <file category="include" condition="ARMCC, GCC, IAR" name="hpl/sysctrl"/>
-        <file category="include" condition="ARMCC, GCC, IAR" name="hpl/tc"/>
+        <file category="include" condition="ARMCC, GCC, IAR" name="hpl/tcc"/>
         <file category="include" condition="ARMCC, GCC, IAR" name="hri"/>
         <file category="include" condition="ARMCC, GCC, IAR" name=""/>
       </files>

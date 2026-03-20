@@ -140,8 +140,8 @@
 #define CONF_GCLK_SERCOM4_SLOW_FREQUENCY 400000
 #endif
 
-// <y> TC Clock Source
-// <id> tc_gclk_selection
+// <y> TCC Clock Source
+// <id> tcc_gclk_selection
 
 // <GCLK_CLKCTRL_GEN_GCLK0_Val"> Generic clock generator 0
 
@@ -159,17 +159,17 @@
 
 // <GCLK_CLKCTRL_GEN_GCLK7_Val"> Generic clock generator 7
 
-// <i> Select the clock source for TC.
-#ifndef CONF_GCLK_TC3_SRC
-#define CONF_GCLK_TC3_SRC GCLK_CLKCTRL_GEN_GCLK0_Val
+// <i> Select the clock source for TCC.
+#ifndef CONF_GCLK_TCC0_SRC
+#define CONF_GCLK_TCC0_SRC GCLK_CLKCTRL_GEN_GCLK0_Val
 #endif
 
 /**
- * \def CONF_GCLK_TC3_FREQUENCY
- * \brief TC3's Clock frequency
+ * \def CONF_GCLK_TCC0_FREQUENCY
+ * \brief TCC0's Clock frequency
  */
-#ifndef CONF_GCLK_TC3_FREQUENCY
-#define CONF_GCLK_TC3_FREQUENCY 1000000
+#ifndef CONF_GCLK_TCC0_FREQUENCY
+#define CONF_GCLK_TCC0_FREQUENCY 1000000
 #endif
 
 // <<< end of configuration section >>>

@@ -234,37 +234,6 @@ drivers:
         configuration:
           core_gclk_selection: Generic clock generator 0
           slow_gclk_selection: Generic clock generator 3
-  PWM_0:
-    user_label: PWM_0
-    definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::TC3::driver_config_definition::PWM::HAL:Driver:PWM
-    functionality: PWM
-    api: HAL:Driver:PWM
-    configuration:
-      tc_arch_dbgrun: false
-      tc_arch_evact: Event action disabled
-      tc_arch_mceo0: false
-      tc_arch_mceo1: false
-      tc_arch_mode: Counter in 16-bit mode
-      tc_arch_ovfeo: false
-      tc_arch_presync: Reload or reset counter on next GCLK
-      tc_arch_runstdby: false
-      tc_arch_tcei: false
-      tc_arch_tceinv: false
-      tc_arch_wave_duty_val: 500
-      tc_arch_wave_per_val: 1000
-      tc_prescaler: Divide by 8
-      timer_event_control: false
-    optional_signals: []
-    variant: null
-    clocks:
-      domain_group:
-        nodes:
-        - name: TC
-          input: Generic clock generator 0
-          external: false
-          external_frequency: 0
-        configuration:
-          tc_gclk_selection: Generic clock generator 0
   DMAC:
     user_label: DMAC
     definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::DMAC::driver_config_definition::DMAC::HAL:HPL:DMAC
@@ -631,6 +600,89 @@ drivers:
     variant: null
     clocks:
       domain_group: null
+  PWM_0:
+    user_label: PWM_0
+    definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::TCC0::driver_config_definition::PWM::HAL:Driver:PWM
+    functionality: PWM
+    api: HAL:Driver:PWM
+    configuration:
+      tcc_arch_alock: false
+      tcc_arch_cc0: 0
+      tcc_arch_cc1: 0
+      tcc_arch_cc2: 0
+      tcc_arch_cc3: 0
+      tcc_arch_cnteo: false
+      tcc_arch_cntsel: An interrupt/event is generated when a new counter cycle starts
+      tcc_arch_cpten0: false
+      tcc_arch_cpten1: false
+      tcc_arch_cpten2: false
+      tcc_arch_cpten3: false
+      tcc_arch_dbgrun: false
+      tcc_arch_evact0: Event action disabled
+      tcc_arch_evact1: Event action disabled
+      tcc_arch_lupd: true
+      tcc_arch_mcei0: false
+      tcc_arch_mcei1: false
+      tcc_arch_mcei2: false
+      tcc_arch_mcei3: false
+      tcc_arch_mceo0: false
+      tcc_arch_mceo1: false
+      tcc_arch_mceo2: false
+      tcc_arch_mceo3: false
+      tcc_arch_ovfeo: false
+      tcc_arch_prescsync: Reload or reset counter on next GCLK
+      tcc_arch_runstdby: false
+      tcc_arch_sel_ch: 1
+      tcc_arch_tcei0: false
+      tcc_arch_tcei1: false
+      tcc_arch_tceinv0: false
+      tcc_arch_tceinv1: false
+      tcc_arch_trgeo: false
+      tcc_arch_wave_duty_val: 500
+      tcc_arch_wave_per_val: 1000
+      tcc_arch_wavegen: Single-slope PWM
+      tcc_per: 10000
+      tcc_prescaler: Divide by 8
+      timer_event_control: false
+    optional_signals:
+    - identifier: PWM_0:WO/2
+      pad: PA18
+      mode: PWM output
+      configuration: null
+      definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::optional_signal_definition::TCC0.WO.2
+      name: TCC0/WO/2
+      label: WO/2
+    - identifier: PWM_0:WO/3
+      pad: PA19
+      mode: PWM output
+      configuration: null
+      definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::optional_signal_definition::TCC0.WO.3
+      name: TCC0/WO/3
+      label: WO/3
+    - identifier: PWM_0:WO/6
+      pad: PA16
+      mode: PWM output
+      configuration: null
+      definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::optional_signal_definition::TCC0.WO.6
+      name: TCC0/WO/6
+      label: WO/6
+    - identifier: PWM_0:WO/7
+      pad: PA13
+      mode: PWM output
+      configuration: null
+      definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::optional_signal_definition::TCC0.WO.7
+      name: TCC0/WO/7
+      label: WO/7
+    variant: null
+    clocks:
+      domain_group:
+        nodes:
+        - name: TCC
+          input: Generic clock generator 0
+          external: false
+          external_frequency: 0
+        configuration:
+          tcc_gclk_selection: Generic clock generator 0
 pads:
   PYRO_2:
     name: PA02
@@ -715,7 +767,7 @@ pads:
   BUZZER:
     name: PA13
     definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::pad::PA13
-    mode: Digital output
+    mode: Peripheral IO
     user_label: BUZZER
     configuration: null
   SD_CS:
@@ -734,7 +786,7 @@ pads:
   SERVO_1:
     name: PA16
     definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::pad::PA16
-    mode: Digital output
+    mode: Peripheral IO
     user_label: SERVO_1
     configuration: null
   FLASH_CS:
@@ -747,13 +799,13 @@ pads:
   SERVO_2:
     name: PA18
     definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::pad::PA18
-    mode: Digital output
+    mode: Peripheral IO
     user_label: SERVO_2
     configuration: null
   SERVO_3:
     name: PA19
     definition: Atmel:SAMD21_Drivers:0.0.1::SAMD21G18A-AF::pad::PA19
-    mode: Digital output
+    mode: Peripheral IO
     user_label: SERVO_3
     configuration: null
   IMU_INT:
