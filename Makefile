@@ -12,7 +12,7 @@ flash:
 
 build:
 	@echo "Building..."
-	$(MAKE) -C $(GCC_DIR)
+	$(MAKE) -C $(GCC_DIR) 
 	mkdir -p $(BUILD_DIR)
 	cp $(GCC_DIR)/AtmelStart.elf $(BUILD_DIR)/
 	cp $(GCC_DIR)/AtmelStart.bin $(BUILD_DIR)/

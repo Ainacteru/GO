@@ -1,4 +1,4 @@
-driver_init.d driver_init.o: ../driver_init.c ../driver_init.h \
+led.d led.o: ../src/led.c ../atmel_start.h ../driver_init.h \
  ../atmel_start_pins.h ../hal/include/hal_gpio.h \
  ../hal/include/hpl_gpio.h ../hal/utils/include/compiler.h \
  /usr/lib/gcc/arm-none-eabi/14.2.0/include/stddef.h \
@@ -69,8 +69,8 @@ driver_init.d driver_init.o: ../driver_init.c ../driver_init.h \
  ../hal/utils/include/utils.h ../hal/include/hpl_spi_sync.h \
  ../hal/include/hal_pwm.h ../hal/include/hpl_pwm.h \
  ../hal/include/hpl_irq.h ../hpl/tc/hpl_tc_base.h \
- ../hal/include/hpl_timer.h ../config/peripheral_clk_config.h \
- ../hpl/gclk/hpl_gclk_base.h ../hpl/pm/hpl_pm_base.h
+ ../hal/include/hpl_timer.h ../include/led.h
+../atmel_start.h:
 ../driver_init.h:
 ../atmel_start_pins.h:
 ../hal/include/hal_gpio.h:
@@ -201,6 +201,4 @@ driver_init.d driver_init.o: ../driver_init.c ../driver_init.h \
 ../hal/include/hpl_irq.h:
 ../hpl/tc/hpl_tc_base.h:
 ../hal/include/hpl_timer.h:
-../config/peripheral_clk_config.h:
-../hpl/gclk/hpl_gclk_base.h:
-../hpl/pm/hpl_pm_base.h:
+../include/led.h:

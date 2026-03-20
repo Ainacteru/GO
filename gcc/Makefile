@@ -71,7 +71,8 @@ hal/utils/src/utils_event.o \
 hal/src/hal_sleep.o \
 atmel_start.o \
 hpl/tc/hpl_tc.o \
-hal/src/hal_atomic.o
+hal/src/hal_atomic.o \
+led.o
 
 OBJS_AS_ARGS +=  \
 "hal/src/hal_io.o" \
@@ -100,7 +101,8 @@ OBJS_AS_ARGS +=  \
 "hal/src/hal_sleep.o" \
 "atmel_start.o" \
 "hpl/tc/hpl_tc.o" \
-"hal/src/hal_atomic.o"
+"hal/src/hal_atomic.o" \
+"led.o"
 
 # List the directories containing header files
 DIR_INCLUDES +=  \
@@ -152,7 +154,8 @@ DEPS_AS_ARGS +=  \
 "hal/src/hal_atomic.d" \
 "hpl/tc/hpl_tc.d" \
 "hpl/pm/hpl_pm.d" \
-"atmel_start.d"
+"atmel_start.d" \
+"led.d"
 
 OUTPUT_FILE_NAME :=AtmelStart
 QUOTE := "
@@ -160,6 +163,7 @@ OUTPUT_FILE_PATH +=$(OUTPUT_FILE_NAME).elf
 OUTPUT_FILE_PATH_AS_ARGS +=$(OUTPUT_FILE_NAME).elf
 
 vpath %.c ../
+vpath %.c ../src
 vpath %.s ../
 vpath %.S ../
 

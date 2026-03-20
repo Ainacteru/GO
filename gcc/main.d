@@ -1,5 +1,5 @@
-main.d main.o: ../main.c ../atmel_start.h ../driver_init.h \
- ../atmel_start_pins.h ../hal/include/hal_gpio.h \
+main.d main.o: ../main.c ../include/led.h ../atmel_start.h \
+ ../driver_init.h ../atmel_start_pins.h ../hal/include/hal_gpio.h \
  ../hal/include/hpl_gpio.h ../hal/utils/include/compiler.h \
  /usr/lib/gcc/arm-none-eabi/14.2.0/include/stddef.h \
  /usr/lib/gcc/arm-none-eabi/14.2.0/include/stdint.h \
@@ -63,7 +63,14 @@ main.d main.o: ../main.c ../atmel_start.h ../driver_init.h \
  ../hal/include/hpl_irq.h ../hal/include/hpl_reset.h \
  ../hal/include/hpl_sleep.h ../hal/include/hal_init.h \
  ../hal/include/hpl_init.h ../hal/include/hal_io.h \
- ../hal/include/hal_sleep.h
+ ../hal/include/hal_sleep.h ../hal/include/hal_i2c_m_sync.h \
+ ../hal/include/hpl_i2c_m_sync.h ../hal/include/hal_spi_m_sync.h \
+ ../hal/include/hpl_spi_m_sync.h ../hal/include/hpl_spi.h \
+ ../hal/utils/include/utils.h ../hal/include/hpl_spi_sync.h \
+ ../hal/include/hal_pwm.h ../hal/include/hpl_pwm.h \
+ ../hal/include/hpl_irq.h ../hpl/tc/hpl_tc_base.h \
+ ../hal/include/hpl_timer.h
+../include/led.h:
 ../atmel_start.h:
 ../driver_init.h:
 ../atmel_start_pins.h:
@@ -183,3 +190,15 @@ main.d main.o: ../main.c ../atmel_start.h ../driver_init.h \
 ../hal/include/hpl_init.h:
 ../hal/include/hal_io.h:
 ../hal/include/hal_sleep.h:
+../hal/include/hal_i2c_m_sync.h:
+../hal/include/hpl_i2c_m_sync.h:
+../hal/include/hal_spi_m_sync.h:
+../hal/include/hpl_spi_m_sync.h:
+../hal/include/hpl_spi.h:
+../hal/utils/include/utils.h:
+../hal/include/hpl_spi_sync.h:
+../hal/include/hal_pwm.h:
+../hal/include/hpl_pwm.h:
+../hal/include/hpl_irq.h:
+../hpl/tc/hpl_tc_base.h:
+../hal/include/hpl_timer.h:

@@ -1,6 +1,5 @@
-driver_init.d driver_init.o: ../driver_init.c ../driver_init.h \
- ../atmel_start_pins.h ../hal/include/hal_gpio.h \
- ../hal/include/hpl_gpio.h ../hal/utils/include/compiler.h \
+hpl/tc/hpl_tc.d hpl/tc/hpl_tc.o: ../hpl/tc/hpl_tc.c \
+ ../hal/include/hpl_pwm.h ../hal/utils/include/compiler.h \
  /usr/lib/gcc/arm-none-eabi/14.2.0/include/stddef.h \
  /usr/lib/gcc/arm-none-eabi/14.2.0/include/stdint.h \
  /usr/arm-none-eabi/include/stdint.h \
@@ -58,23 +57,12 @@ driver_init.d driver_init.o: ../driver_init.c ../driver_init.h \
  ../hri/hri_sysctrl_d21.h ../hri/hri_systemcontrol_d21.h \
  ../hri/hri_systick_d21.h ../hri/hri_tc_d21.h ../hri/hri_tcc_d21.h \
  ../hri/hri_usb_d21.h ../hri/hri_wdt_d21.h \
- ../hal/utils/include/err_codes.h ../hpl/port/hpl_gpio_base.h \
- ../hal/utils/include/utils_assert.h ../hal/include/hal_delay.h \
- ../hal/include/hpl_irq.h ../hal/include/hpl_reset.h \
- ../hal/include/hpl_sleep.h ../hal/include/hal_init.h \
- ../hal/include/hpl_init.h ../hal/include/hal_io.h \
- ../hal/include/hal_sleep.h ../hal/include/hal_i2c_m_sync.h \
- ../hal/include/hpl_i2c_m_sync.h ../hal/include/hal_spi_m_sync.h \
- ../hal/include/hpl_spi_m_sync.h ../hal/include/hpl_spi.h \
- ../hal/utils/include/utils.h ../hal/include/hpl_spi_sync.h \
- ../hal/include/hal_pwm.h ../hal/include/hpl_pwm.h \
- ../hal/include/hpl_irq.h ../hpl/tc/hpl_tc_base.h \
- ../hal/include/hpl_timer.h ../config/peripheral_clk_config.h \
- ../hpl/gclk/hpl_gclk_base.h ../hpl/pm/hpl_pm_base.h
-../driver_init.h:
-../atmel_start_pins.h:
-../hal/include/hal_gpio.h:
-../hal/include/hpl_gpio.h:
+ ../hal/utils/include/err_codes.h ../hal/include/hpl_irq.h \
+ ../config/hpl_tc_config.h ../config/peripheral_clk_config.h \
+ ../hal/include/hpl_timer.h ../hal/include/hpl_irq.h \
+ ../hal/utils/include/utils.h ../hal/utils/include/utils_assert.h \
+ ../hpl/tc/hpl_tc_base.h
+../hal/include/hpl_pwm.h:
 ../hal/utils/include/compiler.h:
 /usr/lib/gcc/arm-none-eabi/14.2.0/include/stddef.h:
 /usr/lib/gcc/arm-none-eabi/14.2.0/include/stdint.h:
@@ -179,28 +167,11 @@ driver_init.d driver_init.o: ../driver_init.c ../driver_init.h \
 ../hri/hri_usb_d21.h:
 ../hri/hri_wdt_d21.h:
 ../hal/utils/include/err_codes.h:
-../hpl/port/hpl_gpio_base.h:
-../hal/utils/include/utils_assert.h:
-../hal/include/hal_delay.h:
 ../hal/include/hpl_irq.h:
-../hal/include/hpl_reset.h:
-../hal/include/hpl_sleep.h:
-../hal/include/hal_init.h:
-../hal/include/hpl_init.h:
-../hal/include/hal_io.h:
-../hal/include/hal_sleep.h:
-../hal/include/hal_i2c_m_sync.h:
-../hal/include/hpl_i2c_m_sync.h:
-../hal/include/hal_spi_m_sync.h:
-../hal/include/hpl_spi_m_sync.h:
-../hal/include/hpl_spi.h:
-../hal/utils/include/utils.h:
-../hal/include/hpl_spi_sync.h:
-../hal/include/hal_pwm.h:
-../hal/include/hpl_pwm.h:
-../hal/include/hpl_irq.h:
-../hpl/tc/hpl_tc_base.h:
-../hal/include/hpl_timer.h:
+../config/hpl_tc_config.h:
 ../config/peripheral_clk_config.h:
-../hpl/gclk/hpl_gclk_base.h:
-../hpl/pm/hpl_pm_base.h:
+../hal/include/hpl_timer.h:
+../hal/include/hpl_irq.h:
+../hal/utils/include/utils.h:
+../hal/utils/include/utils_assert.h:
+../hpl/tc/hpl_tc_base.h:
