@@ -1,0 +1,26 @@
+[package]
+name = "GO"
+version = "0.1.0"
+edition = "2021"
+
+[package.metadata]
+chip = "ATSAMD21G18A"
+
+[dependencies]
+heapless = "0.9.2"
+usb-device = "0.3.2"
+usbd-serial = "0.2.2"
+panic-halt = "0.2"
+cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
+cortex-m-rt = { version = "0.7", optional = true }
+atsamd-hal = { version = "0.23.3", default-features = false}
+
+[features]
+default = ["rt", "usb", "atsamd-hal/samd21g"]
+rt = ["cortex-m-rt", "atsamd-hal/samd21g-rt"]
+usb = ["atsamd-hal/usb"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
