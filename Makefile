@@ -1,5 +1,5 @@
 UF2CONV = ~/Projects/Embedded/bootloader/microsoft-uf2/utils/uf2conv.py
-CARGO_OUT = target/thumbv6m-none-eabi/release/samdhal
+CARGO_OUT = target/thumbv6m-none-eabi/release/GO
 BIN = builds/out.bin
 UF2 = builds/out.uf2
 
