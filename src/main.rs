@@ -1,11 +1,14 @@
 #![no_std]
 #![no_main]
 
+use core::panic::PanicInfo;
+
 use GO::actuators::servo;
-use GO::actuators::servo::Servos;
+use GO::actuators::servo::Servo;
+use GO::pac::evsys::channel;
 use atsamd_hal::delay::Delay;
+use atsamd_hal::pwm::Channel;
 use atsamd_hal::pwm::Pwm0;
-use panic_halt as _;
 
 use GO as bsp;
 use bsp::hal;
@@ -29,32 +32,48 @@ fn main() -> ! {
         &mut peripherals.sysctrl,
         &mut peripherals.nvmctrl,
     );
-
     let pins = bsp::Pins::new(peripherals.port);
 
-    // usb::set_up(
-    //     peripherals.usb,
-    //     &mut clocks,
-    //     &mut peripherals.pm,
-    //     pins.usb_dm,
-    //     pins.usb_dp,
-    //     &mut core.NVIC,
-    // );
+    usb::set_up(
+        peripherals.usb,
+        &mut clocks,
+        &mut peripherals.pm,
+        pins.usb_dm,
+        pins.usb_dp,
+        &mut core.NVIC,
+    );
 
 
     let glck0 = clocks.gclk0();
     let mut pwm0 = Pwm0::new(&clocks.tcc0_tcc1(&glck0).unwrap(), 50.Hz(), peripherals.tcc0, &mut peripherals.pm);
-    let mut servo = servo::Servo::new(Servos::Servo1, pwm0, pins);
-    //let mut led = pins.led.into_push_pull_output();
     let mut delay = Delay::new(core.SYST, &mut clocks);
 
+    let servo1:Servo<bsp::Servo1Pwm> = Servo::new(pins.servo1.into());
 
-
+    delay.delay_ms(500u32);
 
     loop {
-        servo.set_position(200);
+        servo1.set_pos(&mut pwm0, 0);
         delay.delay_ms(500u32);
-        servo.set_position(0);
+        servo1.set_pos(&mut pwm0, 50);
+        delay.delay_ms(500u32);
+        servo1.set_pos(&mut pwm0, 100);
+        delay.delay_ms(500u32);
+        servo1.set_pos(&mut pwm0, 150);
+        delay.delay_ms(500u32);
+        servo1.set_pos(&mut pwm0, 400);
+        delay.delay_ms(500u32);
+        servo1.set_pos(&mut pwm0, 250);
+        delay.delay_ms(500u32);
+        servo1.set_pos(&mut pwm0, 300);
+        delay.delay_ms(500u32);
 
     }
+}
+
+#[panic_handler]
+fn panic (_info: &PanicInfo) -> ! {
+    uprintln!("\n");
+    uprintln!("PANIC! {}", _info);
+    loop {}
 }

@@ -3,6 +3,7 @@
 
 pub mod communcation;
 pub mod actuators;
+pub mod indicators;
 
 #[cfg(feature = "rt")]
 pub use cortex_m_rt::entry;
@@ -44,7 +45,7 @@ pub mod pins {
             name: rgb_blue
             aliases: {
                 PushPullOutput: RgbBlue
-                AlternateE: RgbBluePwm
+                AlternateF: RgbBluePwm
 
             }
         }
@@ -53,7 +54,7 @@ pub mod pins {
             name: rgb_green
             aliases: {
                 PushPullOutput: RgbGreen
-                AlternateE: RgbGreenPwm
+                AlternateF: RgbGreenPwm
             }
         }
         PA06 {

@@ -1,50 +1,51 @@
-use core::{ptr};
-
-use crate::Pins;
-use atsamd_hal::{prelude, pwm::Channel};
+use atsamd_hal::pwm::{self, Pwm0};
 use cortex_m::prelude::_embedded_hal_Pwm;
+use core::marker::PhantomData;
 
-#[derive(Copy, Clone)]
-pub enum Servos {
-    Servo1,
-    Servo2,
-    Servo3,
+use crate::uprintln;
+
+pub trait ServoPin {
+    fn channel() -> pwm::Channel;
 }
 
-impl Servos {
-    pub fn activate(self, pins: crate::Pins) {
-        match self {
-            Servos::Servo1 => {let _: crate::pins::Servo1Pwm = pins.servo1.into();},
-            Servos::Servo2 => {let _: crate::pins::Servo2Pwm = pins.servo2.into();},
-            Servos::Servo3 => {let _: crate::pins::Servo3Pwm = pins.servo3.into();},
+impl ServoPin for crate::Servo1Pwm {
+    fn channel() -> pwm::Channel { pwm::Channel::_2 }
+}
+impl ServoPin for crate::Servo2Pwm {
+    fn channel() -> pwm::Channel { pwm::Channel::_1 }
+}
+impl ServoPin for crate::Servo3Pwm {
+    fn channel() -> pwm::Channel { pwm::Channel::_3 }
+}
+
+
+
+pub struct Servo<P: ServoPin> {
+    _marker: PhantomData<P>,
+}
+
+impl<P> Servo<P> 
+where P: ServoPin
+{
+    pub fn new(_pin: P) -> Self {
+        Self { _marker:PhantomData }
+    }
+
+    pub fn set_pos(&self, pwm: &mut Pwm0, angle: u32) {
+
+        const MAX_ANGLE: i32 = 300;
+        if angle > 300 {
+            panic!("set_pos is {} instead of the max of {}", angle, MAX_ANGLE)
         }
+
+        let angle = angle.min(300); // safety clamp
+
+        let pulse_width = 1000 + (angle * 1000) / 300;
+
+        let max = pwm.get_max_duty();
+        let duty = pulse_width * max / 20000;
+
+        pwm.set_duty(P::channel(), duty);
+        uprintln!("angle {}, pulse: {}, duty: {},", angle, pulse_width, duty);
     }
 }
-
-pub struct Servo {
-    servo: Servos,
-    pwm: atsamd_hal::pwm::Pwm0,
-}
-
-impl Servo{
-    pub fn new(servo: Servos, pwm: atsamd_hal::pwm::Pwm0, pins: crate::Pins) -> Servo {
-        servo.activate(pins);
-        Servo {
-            servo,
-            pwm,
-        } 
-    }
-
-    pub fn set_position(&mut self, position: u32) {
-        match self.servo {
-            Servos::Servo1 => {
-                let max_duty = self.pwm.get_max_duty();
-                self.pwm.set_duty(Channel::_2, max_duty/position);
-            },
-            Servos::Servo2 => todo!(),
-            Servos::Servo3 => todo!(),
-        }
-    }
-}
-            
-            
