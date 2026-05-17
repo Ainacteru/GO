@@ -10,7 +10,6 @@ chip = "ATSAMD21G18A"
 heapless = "0.9.2"
 usb-device = "0.3.2"
 usbd-serial = "0.2.2"
-panic-halt = "0.2"
 cortex-m = { version = "0.7", features = ["critical-section-single-core"] }
 cortex-m-rt = { version = "0.7", optional = true }
 atsamd-hal = { version = "0.23.3", default-features = false}
