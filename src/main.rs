@@ -3,14 +3,20 @@
 
 use core::panic::PanicInfo;
 
-use GO::actuators::servo;
-use GO::actuators::servo::Servo;
-use GO::pac::evsys::channel;
+use go::Led;
+use go::RgbRed;
+use go::RgbRedPwm;
+use go::actuators::servo;
+use go::actuators::servo::Servo;
+use go::indicators::Leds::rgb_leds;
+use go::indicators::Leds::rgb_leds::RgbLed;
+use go::pac::evsys::channel;
 use atsamd_hal::delay::Delay;
 use atsamd_hal::pwm::Channel;
 use atsamd_hal::pwm::Pwm0;
 
-use GO as bsp;
+use go as bsp;
+use atsamd_hal::pwm::Pwm2;
 use bsp::hal;
 use bsp::pac;
 
@@ -19,8 +25,8 @@ use hal::clock::GenericClockController;
 use hal::prelude::*;
 use pac::{CorePeripherals, Peripherals};
 
-use GO::{uprintln, uprint};
-use GO::communcation::usb;
+use go::{uprintln, uprint};
+use go::communcation::usb;
 
 #[entry]
 fn main() -> ! {
@@ -46,34 +52,42 @@ fn main() -> ! {
 
     let glck0 = clocks.gclk0();
     let mut pwm0 = Pwm0::new(&clocks.tcc0_tcc1(&glck0).unwrap(), 50.Hz(), peripherals.tcc0, &mut peripherals.pm);
+    let mut pwm2 = Pwm2::new(&clocks.tcc2_tc3(&glck0).unwrap(), 50.Hz(), peripherals.tcc2, &mut peripherals.pm);
+
     let mut delay = Delay::new(core.SYST, &mut clocks);
 
     let servo1:Servo<bsp::Servo1Pwm> = Servo::new(pins.servo1.into());
+    let servo2:Servo<bsp::Servo2Pwm> = Servo::new(pins.servo2.into());
+    let servo3:Servo<bsp::Servo3Pwm> = Servo::new(pins.servo3.into());
 
+    // let red: RgbLed::<bsp::RgbGreenPwm> = rgb_leds::RgbLed::new(pins.rgb_green.into());
     delay.delay_ms(500u32);
+    uprint!("starting");
+
 
     loop {
-        servo1.set_pos(&mut pwm0, 0);
-        delay.delay_ms(500u32);
-        servo1.set_pos(&mut pwm0, 50);
-        delay.delay_ms(500u32);
-        servo1.set_pos(&mut pwm0, 100);
-        delay.delay_ms(500u32);
-        servo1.set_pos(&mut pwm0, 150);
-        delay.delay_ms(500u32);
-        servo1.set_pos(&mut pwm0, 400);
-        delay.delay_ms(500u32);
-        servo1.set_pos(&mut pwm0, 250);
-        delay.delay_ms(500u32);
-        servo1.set_pos(&mut pwm0, 300);
+        servo1.set_pos(&mut pwm2, 400);
         delay.delay_ms(500u32);
 
+        servo1.set_pos(&mut pwm2, 300);
+        delay.delay_ms(500u32);
     }
 }
-
 #[panic_handler]
 fn panic (_info: &PanicInfo) -> ! {
-    uprintln!("\n");
+    let mut peripherals = unsafe { Peripherals::steal() };
+    let pins = bsp::Pins::new(peripherals.port);
+    let mut led: Led = pins.led.into();
+    let mut red: RgbRed = pins.rgb_red.into();
+    unsafe { cortex_m::interrupt::enable() };
+
     uprintln!("PANIC! {}", _info);
-    loop {}
+
+    red.set_high();
+
+    loop {
+        led.toggle();
+
+        cortex_m::asm::delay(6_500_000); // ~1s at 8MHz
+    }
 }

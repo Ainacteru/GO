@@ -30,7 +30,6 @@ pub fn set_up(
         USB_ALLOCATOR.borrow(cs).replace(Some(usb_allocator(usb, clocks, pm, usb_dm, usb_dp)));
     });
 
-    // Safety: allocator is stored in a static and never moved or dropped
     let allocator: &'static UsbBusAllocator<UsbBus> = unsafe {
         cortex_m::interrupt::free(|cs| {
             &*(USB_ALLOCATOR.borrow(cs).borrow().as_ref().unwrap() as *const _)
@@ -90,7 +89,6 @@ fn poll_usb() {
         }
     });
 
-    // Echo after releasing borrows
     if !echo_buf.is_empty() {
         uprint!("{}", echo_buf.as_str());
     }

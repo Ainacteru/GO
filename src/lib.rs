@@ -45,7 +45,7 @@ pub mod pins {
             name: rgb_blue
             aliases: {
                 PushPullOutput: RgbBlue
-                AlternateF: RgbBluePwm
+                AlternateE: RgbBluePwm
 
             }
         }
@@ -54,7 +54,7 @@ pub mod pins {
             name: rgb_green
             aliases: {
                 PushPullOutput: RgbGreen
-                AlternateF: RgbGreenPwm
+                AlternateE: RgbGreenPwm
             }
         }
         PA06 {
@@ -124,7 +124,7 @@ pub mod pins {
             /// Servo 1 PWM output
             name: servo1
             aliases: {
-                AlternateF: Servo1Pwm
+                AlternateE: Servo1Pwm
             }
         }
         PA17 {
