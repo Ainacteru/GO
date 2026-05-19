@@ -49,28 +49,28 @@ fn main() -> ! {
         &mut core.NVIC,
     );
 
-
     let glck0 = clocks.gclk0();
     let mut pwm0 = Pwm0::new(&clocks.tcc0_tcc1(&glck0).unwrap(), 50.Hz(), peripherals.tcc0, &mut peripherals.pm);
     let mut pwm2 = Pwm2::new(&clocks.tcc2_tc3(&glck0).unwrap(), 50.Hz(), peripherals.tcc2, &mut peripherals.pm);
 
+    
     let mut delay = Delay::new(core.SYST, &mut clocks);
 
     let servo1:Servo<bsp::Servo1Pwm> = Servo::new(pins.servo1.into());
     let servo2:Servo<bsp::Servo2Pwm> = Servo::new(pins.servo2.into());
     let servo3:Servo<bsp::Servo3Pwm> = Servo::new(pins.servo3.into());
 
-    // let red: RgbLed::<bsp::RgbGreenPwm> = rgb_leds::RgbLed::new(pins.rgb_green.into());
+    let red: RgbLed::<bsp::RgbBluePwm> = rgb_leds::RgbLed::new(pins.rgb_blue.into());
     delay.delay_ms(500u32);
+    usb::set_input_ready();
     uprint!("starting");
 
 
     loop {
-        servo1.set_pos(&mut pwm2, 400);
-        delay.delay_ms(500u32);
-
-        servo1.set_pos(&mut pwm2, 300);
-        delay.delay_ms(500u32);
+        red.set_brightness(&mut pwm0, 50);
+        delay.delay_ms(100u32);
+        red.set_brightness(&mut pwm0, 100);
+        delay.delay_ms(100u32);
     }
 }
 #[panic_handler]

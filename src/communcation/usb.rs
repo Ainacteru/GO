@@ -3,6 +3,7 @@ use heapless::String;
 use cortex_m::interrupt::Mutex;
 use usb_device::bus::UsbBusAllocator;
 use usb_device::prelude::*;
+use usb_device::device::UsbDeviceState;
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
 use crate::hal::clock::GenericClockController;
@@ -17,6 +18,13 @@ static USB_BUS: Mutex<RefCell<Option<UsbDevice<'static, UsbBus>>>> = Mutex::new(
 pub static USB_SERIAL: Mutex<RefCell<Option<SerialPort<'static, UsbBus>>>> = Mutex::new(RefCell::new(None));
 
 static MESSAGE: Mutex<RefCell<String<64>>> = Mutex::new(RefCell::new(String::new()));
+static USB_INPUT_READY: Mutex<RefCell<bool>> = Mutex::new(RefCell::new(false));
+
+pub fn set_input_ready() {
+    cortex_m::interrupt::free(|cs| {
+        *USB_INPUT_READY.borrow(cs).borrow_mut() = true;
+    });
+}
 
 pub fn set_up(
     usb: pac::Usb,
@@ -70,12 +78,28 @@ fn poll_usb() {
 
         usb_dev.poll(&mut [serial as &mut dyn usb_device::class::UsbClass<UsbBus>]);
 
+        if usb_dev.state() != UsbDeviceState::Configured {
+            return;
+        }
+        if !*USB_INPUT_READY.borrow(cs).borrow() {
+            let mut d = [0u8; 64];
+            serial.read(&mut d).ok();
+            return;
+        }
+
         let mut buf = [0u8; 64];
         if let Ok(count) = serial.read(&mut buf) {
             if let Ok(s) = core::str::from_utf8(&buf[..count]) {
                 for c in s.chars() {
                     if c == '\r' {
                         message_ready = true;
+                    } else if c == '\x08' || c == '\x7f' {
+                        let mut msg = MESSAGE.borrow(cs).borrow_mut();
+                        if msg.pop().is_some() {
+                            echo_buf.push('\x08').ok();
+                            echo_buf.push(' ').ok();
+                            echo_buf.push('\x08').ok();
+                        }
                     } else {
                         let mut msg = MESSAGE.borrow(cs).borrow_mut();
                         echo_buf.push(c).ok();
