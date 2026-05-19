@@ -20,6 +20,7 @@ Hardware:
 Runs off of the [Microsoft UF2-SAMDx1](https://github.com/microsoft/uf2-samdx1) UF2 flashing bootloader
 
 
+<img width="1529" height="1345" alt="Screenshot_20260518_230330" src="https://github.com/user-attachments/assets/ba3ae527-99fc-4b64-9459-b900f79660b8" />
 
 <img width="1812" height="1302" alt="Screenshot_20260517_232126" src="https://github.com/user-attachments/assets/b309c8c2-ef9a-4bdd-a9aa-ddd3160e803e" />
 <img width="1451" height="1443" alt="Screenshot_20260517_231047" src="https://github.com/user-attachments/assets/7b27bea9-9bb1-4b78-b367-e48f0347ada7" />
