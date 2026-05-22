@@ -63,7 +63,11 @@ async fn main(_spawner: Spawner) -> ! {
     let mut baro = Bmp::new(i2c);
 
     loop {
-        uprintln!("temperature: {}", baro.read_temperature());
+        uprintln!("temperature: {} C", baro.read_temperature());
+        uprintln!("pressure: {} Pa", baro.read_pressure());
+        uprintln!("get_altitude: {} M", baro.get_altitude());
+
+        delay.delay_ms(100u32);
     }
 }
 
