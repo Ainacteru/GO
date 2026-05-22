@@ -26,6 +26,7 @@ pub fn set_input_ready() {
     });
 }
 
+#[cfg(feature = "usb")]
 pub fn set_up(
     usb: pac::Usb,
     clocks: &mut GenericClockController,

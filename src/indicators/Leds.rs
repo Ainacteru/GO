@@ -37,7 +37,7 @@ pub mod rgb_leds{
             let b = max * brightness / 100;
 
             pwm.set_duty(P::channel(), b);
-            uprintln!("brightness: {}, actual: {}", brightness, b);
+            //uprintln!("brightness: {}, actual: {}", brightness, b);
         }
     }
 }

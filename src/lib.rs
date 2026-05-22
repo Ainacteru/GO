@@ -4,6 +4,8 @@
 pub mod communcation;
 pub mod actuators;
 pub mod indicators;
+pub mod sensors;
+pub mod peripherals;
 
 #[cfg(feature = "rt")]
 pub use cortex_m_rt::entry;
