@@ -65,7 +65,7 @@ async fn main(_spawner: Spawner) -> ! {
     loop {
         uprintln!("temperature: {} C", baro.read_temperature());
         uprintln!("pressure: {} Pa", baro.read_pressure());
-        uprintln!("get_altitude: {} M", baro.get_altitude());
+        uprintln!("altitude: {} cM", baro.get_altitude() * 100.0);
 
         delay.delay_ms(100u32);
     }

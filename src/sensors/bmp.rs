@@ -30,9 +30,15 @@ pub struct PressureComp {
     par_p11: f32,
 }
 
+pub struct Readings {
+    altitude: f32,
+    started: bool,
+}
+
 pub struct Bmp {
     i2c: I2c,
     calibration: NVMregs,
+    readings: Readings,
 }
 
 impl Bmp {
@@ -44,6 +50,7 @@ impl Bmp {
         Self {
             i2c,
             calibration: NVMregs::new(calib),
+            readings: Readings { altitude: 0.0, started: false }
         }
     }
 
@@ -57,6 +64,13 @@ impl Bmp {
         let partial2 = partial1 * self.calibration.temperature.par_t2;
         self.calibration.t_lin = partial2 + (partial1 * partial1) * self.calibration.temperature.par_t3;
         self.calibration.t_lin
+
+        // partial_data1 = (float)(uncomp_temp – calib_data->par_t1);
+        // partial_data2 = (float)(partial_data1 * calib_data->par_t2);
+        
+        // calib_data->t_lin = partial_data2 + (partial_data1 * partial_data1) * calib_data->par_t3;
+
+        // return calib_data->t_lin;
     }   
 
     pub fn read_pressure(&mut self) -> f32 {
@@ -104,7 +118,15 @@ impl Bmp {
     }
 
     pub fn get_altitude(& mut self) -> f32 {
-        44330.0 * (1.0 - libm::powf(self.read_pressure() / 101325.0 ,0.1903) )
+        let now = 44330.0 * (1.0 - libm::powf(self.read_pressure() / 101325.0 ,0.1903) );
+
+        if !self.readings.started{
+            self.readings.altitude = now;
+            self.readings.started = true;
+        }
+
+
+        now - self.readings.altitude
     }
 }
 
