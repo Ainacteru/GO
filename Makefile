@@ -7,10 +7,13 @@ $(BIN): $(CARGO_OUT)
 	mkdir -p builds
 	arm-none-eabi-objcopy -O binary $(CARGO_OUT) $(BIN)
 
-.PHONY: $(CARGO_OUT) flash uf2_flash clean
+.PHONY: $(CARGO_OUT) host flash uf2_flash clean
 
 $(CARGO_OUT):
-	cargo build --release
+	cd firmware && cargo build --release
+
+host:
+	cargo build --release -p host
 
 uf2 : $(UF2)
 
