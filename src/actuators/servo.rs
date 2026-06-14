@@ -1,8 +1,7 @@
 use atsamd_hal::pwm::{self, Pwm0, Pwm2};
 use cortex_m::prelude::_embedded_hal_Pwm;
+use defmt::info;
 use core::marker::PhantomData;
-
-use crate::uprintln;
 
 pub trait ServoPin {
     type Pwm;
@@ -52,6 +51,6 @@ where
         let duty = pulse_width * max / 20000;
 
         pwm.set_duty(P::channel(), duty);
-        uprintln!("angle {}, pulse: {}, duty: {},", angle, pulse_width, duty);
+        info!("angle {}, pulse: {}, duty: {},", angle, pulse_width, duty);
     }
 }

@@ -2,7 +2,7 @@
 ### What is this?
 This repository contains the most if not all files for what is in and on the flight computer. 
 ### Why?
-Trying to improve on working on the hardware design of embedded systems, and also learning Rust at the same time!
+Trying to improve on working on the hardware design of embedded systems, and also learning Rust at the same time
 ### About the board:
 Hardware:
 * MCU: ATSAMD21G18A-AU

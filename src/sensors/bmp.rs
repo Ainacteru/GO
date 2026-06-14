@@ -1,4 +1,4 @@
-use atsamd_hal::{ehal::i2c::I2c as I2cTrait, pac::rtc::mode0::comp,};
+use atsamd_hal::{ehal::i2c::I2c as I2cTrait};
 use crate::peripherals::i2c::I2c;
 
 const ADDRESS: u8 = 0x77;
@@ -31,8 +31,9 @@ pub struct PressureComp {
 }
 
 pub struct Readings {
-    altitude: f32,
-    started: bool,
+    sum: f32,
+    baseline: f32,
+    samples: u8,
 }
 
 pub struct Bmp {
@@ -45,12 +46,21 @@ impl Bmp {
     pub fn new(mut i2c: I2c) -> Self {
         let mut calib = [0u8; 21];
         i2c.inner().write_read(ADDRESS, &[0x31], &mut calib).unwrap();
-        i2c.inner().write(ADDRESS, &[0x1B, 0x33]).unwrap(); 
+        // PWR_CTRL (0x1B): sleep mode (sensors enabled, mode=00) — required before configuring OSR/IIR
+        i2c.inner().write(ADDRESS, &[0x1B, 0x30]).unwrap();
+        // OSR (0x1C): pressure ×32, temp ×2
+        i2c.inner().write(ADDRESS, &[0x1C, 0x12]).unwrap();
+        // ODR (0x1D): 25Hz
+        i2c.inner().write(ADDRESS, &[0x1D, 0x03]).unwrap();
+        // CONFIG (0x1F): IIR filter coeff 3
+        i2c.inner().write(ADDRESS, &[0x1F, 0x04]).unwrap();
+        // PWR_CTRL (0x1B): normal mode
+        i2c.inner().write(ADDRESS, &[0x1B, 0x33]).unwrap();
 
         Self {
             i2c,
             calibration: NVMregs::new(calib),
-            readings: Readings { altitude: 0.0, started: false }
+            readings: Readings { sum: 0.0, baseline: 0.0, samples: 0 }
         }
     }
 
@@ -75,7 +85,7 @@ impl Bmp {
 
     pub fn read_pressure(&mut self) -> f32 {
         let mut buf = [0u8; 3];
-        self.i2c.inner().write_read(ADDRESS, &[0x04], &mut buf);
+        self.i2c.inner().write_read(ADDRESS, &[0x04], &mut buf).unwrap();
 
         let raw = (buf[2] as u32) << 16 | (buf[1] as u32) << 8 | buf[0] as u32;
         let t_lin = self.calibration.t_lin;
@@ -117,16 +127,23 @@ impl Bmp {
         // return comp_press;
     }
 
-    pub fn get_altitude(& mut self) -> f32 {
-        let now = 44330.0 * (1.0 - libm::powf(self.read_pressure() / 101325.0 ,0.1903) );
+    pub fn get_altitude(&mut self) -> f32 {
+        let now = 44330.0 * (1.0 - libm::powf(self.read_pressure() / 101325.0, 0.1903));
 
-        if !self.readings.started{
-            self.readings.altitude = now;
-            self.readings.started = true;
+        if self.readings.samples < 64 {
+            self.readings.sum += now;
+            self.readings.samples += 1;
+            if self.readings.samples == 64 {
+                self.readings.baseline = self.readings.sum / 64.0;
+            }
+            return 0.0;
         }
 
+        // Slowly drift the baseline to cancel thermal drift (alpha = 0.001)
+        // Fast altitude changes (launch) will still register clearly
+        self.readings.baseline = self.readings.baseline * 0.999 + now * 0.001;
 
-        now - self.readings.altitude
+        now - self.readings.baseline
     }
 }
 

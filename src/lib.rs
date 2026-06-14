@@ -1,6 +1,6 @@
 #![no_std]
 
-
+pub mod panic;
 pub mod communcation;
 pub mod actuators;
 pub mod indicators;
