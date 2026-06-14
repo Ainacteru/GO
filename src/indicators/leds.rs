@@ -3,9 +3,6 @@ pub mod rgb_leds{
 
     use atsamd_hal::pwm::{self, Pwm0};
     use cortex_m::prelude::_embedded_hal_Pwm;
-
-    use crate::uprintln;
-
     pub trait LEDPin {
         fn channel() -> pwm::Channel;
     }

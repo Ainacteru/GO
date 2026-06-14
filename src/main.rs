@@ -1,36 +1,31 @@
 #![no_std]
 #![no_main]
 
-use core::panic::PanicInfo;
-
-use embassy_executor::Spawner;
-use go::Led;
-use go::RgbRed;
-use go::actuators::servo::Servo;
-use go::entry;
-use go::indicators::Leds::rgb_leds;
-use go::indicators::Leds::rgb_leds::RgbLed;
 use atsamd_hal::delay::Delay;
-use atsamd_hal::pwm::Pwm0;
+use defmt::info;
 
+use go::communcation::timestamp;
+use go::communcation::usb::Usb;
+use go::ehal::delay::DelayNs;
+use go::ehal::digital::StatefulOutputPin;
+use go::entry;
+use go::pac::Interrupt;
+use go::pac::NVIC;
+use go::peripherals::i2c;
+use go::peripherals::i2c::I2c;
+use go::sensors::bmp;
 use go::sensors::bmp::Bmp;
 use go as bsp;
-use atsamd_hal::pwm::Pwm2;
 use bsp::hal;
 use bsp::pac;
 
 use hal::clock::GenericClockController;
-use hal::prelude::*;
 use pac::{CorePeripherals, Peripherals};
 
-use go::{uprintln, uprint};
-use go::communcation::usb;
-use go::peripherals::i2c::I2c;
-
-#[embassy_executor::main]
-async fn main(_spawner: Spawner) -> ! {
+#[entry]
+fn main() -> ! {
     let mut peripherals = Peripherals::take().unwrap();
-    let mut core = CorePeripherals::take().unwrap();
+    let core = CorePeripherals::take().unwrap();
     let mut clocks = GenericClockController::with_external_32kosc(
         peripherals.gclk,
         &mut peripherals.pm,
@@ -39,54 +34,34 @@ async fn main(_spawner: Spawner) -> ! {
     );
     let pins = bsp::Pins::new(peripherals.port);
 
-    usb::set_up(
-        peripherals.usb,
-        &mut clocks,
-        &mut peripherals.pm,
-        pins.usb_dm,
-        pins.usb_dp,
-        &mut core.NVIC,
-    );
+    Usb::set_up(&mut clocks, &mut peripherals.pm, pins.usb_dm, pins.usb_dp, peripherals.usb);
+    timestamp::set_up(&mut clocks, peripherals.tc3, &mut peripherals.pm);
 
-    let glck0 = clocks.gclk0();
-
+    enable_interrupts();
     
+    let mut led = pins.led.into_push_pull_output();
     let mut delay = Delay::new(core.SYST, &mut clocks);
 
+    let i2c = I2c::new((pins.sda, pins.scl), peripherals.sercom3, &mut clocks, &mut peripherals.pm);
 
-    delay.delay_ms(2000u32);
-    usb::set_input_ready();
-    uprint!("starting");
-
-    
-    let i2c = I2c::new((pins.sda.into(), pins.scl.into()), peripherals.sercom3, &mut clocks, &mut peripherals.pm);
-    let mut baro = Bmp::new(i2c);
+    let mut bmp = Bmp::new(i2c);
 
     loop {
-        uprintln!("temperature: {} C", baro.read_temperature());
-        uprintln!("pressure: {} Pa", baro.read_pressure());
-        uprintln!("altitude: {} cM", baro.get_altitude() * 100.0);
+        // let temp = bmp.read_temperature();
+        // let press = bmp.read_pressure();
+        // let alt = bmp.get_altitude();
 
-        delay.delay_ms(100u32);
+        // info!("temperature {} c", &temp);
+        // info!("pressure {} Pa", &press);
+        // info!("alitude {} cm", &alt * 100.0);
+        led.toggle();
+        delay.delay_ms(50u32);
     }
 }
 
-#[panic_handler]
-fn panic (_info: &PanicInfo) -> ! {
-    let peripherals = unsafe { Peripherals::steal() };
-    let pins = bsp::Pins::new(peripherals.port);
-    let mut led: Led = pins.led.into();
-    let mut red: RgbRed = pins.rgb_red.into();
-    unsafe { cortex_m::interrupt::enable() };
-
-    
-
-    red.set_high();
-
-    loop {
-        led.toggle();
-        uprintln!("PANIC! {}", _info);
-
-        cortex_m::asm::delay(6_500_000); // ~1s at 8MHz
+fn enable_interrupts() {
+    unsafe {
+        NVIC::unmask(Interrupt::USB);
+        NVIC::unmask(Interrupt::TC3);
     }
 }
