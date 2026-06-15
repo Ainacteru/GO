@@ -1,10 +1,10 @@
-use core::{cell::RefCell, sync::atomic::Ordering::Relaxed};
+use core::{cell::RefCell, slice, sync::atomic::Ordering::Relaxed};
 
 use atsamd_hal::{clock::GenericClockController, pac::Pm, usb::UsbBus};
 use cortex_m::{interrupt::Mutex, singleton};
 use atsamd_hal::pac::interrupt;
 use defmt::warn;
-use portable_atomic::AtomicUsize;
+use portable_atomic::{AtomicBool, AtomicUsize};
 use usb_device::{LangID, bus::UsbBusAllocator, device::{StringDescriptors, UsbDevice, UsbDeviceBuilder, UsbVidPid}};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
@@ -39,13 +39,15 @@ impl Usb {
                         .product("grow one")])
                         .expect("Failed to set strings")
                     .device_class(USB_CLASS_CDC)
+                    .self_powered(true)
                     .build());
         });
     }
 }
 
-static MESSAGE: Mutex<RefCell<[u8; 64]>> = Mutex::new(RefCell::new([0; 64])); 
-static MESSAGE_LENGTH: AtomicUsize = AtomicUsize::new(0);
+static MESSAGE: Mutex<RefCell<[u8; 64]>> = Mutex::new(RefCell::new([0u8; 64])); 
+static INDEX: Mutex<RefCell<usize>> = Mutex::new(RefCell::new(0));
+pub static ON: AtomicBool = AtomicBool::new(false);
 
 
 fn poll_usb() {
@@ -56,37 +58,49 @@ fn poll_usb() {
         let mut dev_ref = USB_DEVICE.borrow(cs).borrow_mut();
         let usb_device =  dev_ref.as_mut();
 
-        if let (Some(_device), Some(serial)) = (&usb_device, serial) {
-            usb_device.unwrap().poll(&mut [serial]);
+        if let (Some(device), Some(serial)) = (usb_device, serial) {
+            if !device.poll(&mut [serial]) {
+                return;
+            }
 
             let mut buf = [0u8; 64];
+            let mut msg = MESSAGE.borrow(cs).borrow_mut();
+            let mut idx = INDEX.borrow(cs).borrow_mut();
 
             if let Ok(count) = serial.read(&mut buf) {
-
-                let message = &MESSAGE.borrow(cs).borrow();
-                
                 for &byte in &buf[..count] {
-                    match byte {
-                        b'\n' => {
+                    serial.write(&[byte]).unwrap();
+                    if *idx < msg.len() {
+                       msg[*idx] = byte;
+                        *idx += 1;
+                    }
 
-                            let msg = core::str::from_utf8(&message[..MESSAGE_LENGTH.swap(0, Relaxed)]).unwrap_or("");
-
-                            warn!("recieved {}", &msg);
-                        }
-
-                        _ => {
-                            let length = &MESSAGE_LENGTH.load(Relaxed);
-                            if length < &message.len() {
-                                MESSAGE.borrow(cs).borrow_mut()[*length] = byte;
-                                
-                                MESSAGE_LENGTH.fetch_add(1, Relaxed);
-                            } else {
-                                MESSAGE_LENGTH.store(0, Relaxed);
+                    if byte == b'\n' || byte == b'\r' {
+                        serial.write("\r\n".as_bytes()).unwrap();
+                        if let Ok(s) = core::str::from_utf8(&msg[..*idx]) {
+                            if s.trim() == "led" {
+                                ON.fetch_xor(true, Relaxed);
                             }
-                        },
+                        }
+                        *msg = [0u8; 64];
+                        *idx = 0;
                     }
                 }
-            };
+            }
+
+            // if let Ok(count) = serial.read(&mut buf) {
+                
+            //     for &byte in &buf[..count] {
+            //         match byte {
+            //             b'\n' => {
+            //             }
+
+            //             _ => {
+            //                 MESSAGE.borrow(cs).
+            //             },
+            //         }
+            //     }
+            // };
         }
     });
 }
