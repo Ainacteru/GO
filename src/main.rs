@@ -1,10 +1,16 @@
 #![no_std]
 #![no_main]
 
+use core::sync::atomic::Ordering::Relaxed;
+
 use atsamd_hal::delay::Delay;
+use atsamd_hal::prelude::_atsamd_hal_embedded_hal_digital_v2_OutputPin;
+use cortex_m::interrupt::free;
 use defmt::info;
 
+use defmt::warn;
 use go::communcation::timestamp;
+use go::communcation::usb::ON;
 use go::communcation::usb::Usb;
 use go::ehal::delay::DelayNs;
 use go::ehal::digital::StatefulOutputPin;
@@ -42,11 +48,13 @@ fn main() -> ! {
     let mut led = pins.led.into_push_pull_output();
     let mut delay = Delay::new(core.SYST, &mut clocks);
 
-    let i2c = I2c::new((pins.sda, pins.scl), peripherals.sercom3, &mut clocks, &mut peripherals.pm);
+    // let i2c = I2c::new((pins.sda, pins.scl), peripherals.sercom3, &mut clocks, &mut peripherals.pm);
 
-    let mut bmp = Bmp::new(i2c);
+    // let mut bmp = Bmp::new(i2c);
 
+    
     loop {
+        warn!("waiting for usb");
         // let temp = bmp.read_temperature();
         // let press = bmp.read_pressure();
         // let alt = bmp.get_altitude();
@@ -54,8 +62,18 @@ fn main() -> ! {
         // info!("temperature {} c", &temp);
         // info!("pressure {} Pa", &press);
         // info!("alitude {} cm", &alt * 100.0);
-        led.toggle();
-        delay.delay_ms(50u32);
+
+        if ON.load(Relaxed) {
+            led.set_high();
+        } else {
+            led.set_low();
+        }
+
+        // free(|cs| {
+        //     warn!("{:?}", *MESSAGE.borrow(cs).borrow());
+        // });
+        
+        // delay.delay_ms(500u32);
     }
 }
 
