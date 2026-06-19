@@ -1,3 +1,5 @@
+use core::cell::RefCell;
+
 use atsamd_hal::{ehal::i2c::I2c as I2cTrait};
 use crate::peripherals::i2c::I2c;
 
@@ -36,38 +38,47 @@ pub struct Readings {
     samples: u8,
 }
 
-pub struct Bmp {
-    i2c: I2c,
+pub struct Bmp<'a> {
+    i2c: &'a RefCell<I2c>,
     calibration: NVMregs,
     readings: Readings,
 }
 
-impl Bmp {
-    pub fn new(mut i2c: I2c) -> Self {
+impl<'a> Bmp<'a> {
+    pub fn new(i2c_cell: &'a RefCell<I2c>) -> Self {
         let mut calib = [0u8; 21];
-        i2c.inner().write_read(ADDRESS, &[0x31], &mut calib).unwrap();
-        // PWR_CTRL (0x1B): sleep mode (sensors enabled, mode=00) — required before configuring OSR/IIR
-        i2c.inner().write(ADDRESS, &[0x1B, 0x30]).unwrap();
-        // OSR (0x1C): pressure ×32, temp ×2
-        i2c.inner().write(ADDRESS, &[0x1C, 0x12]).unwrap();
-        // ODR (0x1D): 25Hz
-        i2c.inner().write(ADDRESS, &[0x1D, 0x03]).unwrap();
-        // CONFIG (0x1F): IIR filter coeff 3
-        i2c.inner().write(ADDRESS, &[0x1F, 0x04]).unwrap();
-        // PWR_CTRL (0x1B): normal mode
-        i2c.inner().write(ADDRESS, &[0x1B, 0x33]).unwrap();
+        {
+            let mut i2c = i2c_cell.borrow_mut();
+            i2c.inner().write_read(ADDRESS, &[0x31], &mut calib).unwrap();
+            // PWR_CTRL (0x1B): sleep mode (sensors enabled, mode=00) — required before configuring OSR/IIR
+            i2c.inner().write(ADDRESS, &[0x1B, 0x30]).unwrap();
+            // OSR (0x1C): pressure ×32, temp ×2
+            i2c.inner().write(ADDRESS, &[0x1C, 0x12]).unwrap();
+            // ODR (0x1D): 25Hz
+            i2c.inner().write(ADDRESS, &[0x1D, 0x03]).unwrap();
+            // CONFIG (0x1F): IIR filter coeff 3
+            i2c.inner().write(ADDRESS, &[0x1F, 0x04]).unwrap();
+            // PWR_CTRL (0x1B): normal mode
+            i2c.inner().write(ADDRESS, &[0x1B, 0x33]).unwrap();
+        }
 
         Self {
-            i2c,
+            i2c: i2c_cell,
             calibration: NVMregs::new(calib),
             readings: Readings { sum: 0.0, baseline: 0.0, samples: 0 }
         }
     }
 
+    pub fn id(&mut self) -> u8 {
+        let mut buf = [0u8; 1];
+        self.i2c.borrow_mut().inner().write_read(ADDRESS, &[0x00], &mut buf).unwrap();
+        buf[0]
+    }
+
     // in celcius 
     pub fn read_temperature(&mut self) -> f32 {
         let mut buf = [0u8; 3];
-        self.i2c.inner().write_read(ADDRESS, &[0x07], &mut buf).unwrap();
+        self.i2c.borrow_mut().inner().write_read(ADDRESS, &[0x07], &mut buf).unwrap();
         let raw = (buf[2] as u32) << 16 | (buf[1] as u32) << 8 | buf[0] as u32;
 
         let partial1 = raw as f32 - self.calibration.temperature.par_t1;
@@ -85,7 +96,7 @@ impl Bmp {
 
     pub fn read_pressure(&mut self) -> f32 {
         let mut buf = [0u8; 3];
-        self.i2c.inner().write_read(ADDRESS, &[0x04], &mut buf).unwrap();
+        self.i2c.borrow_mut().inner().write_read(ADDRESS, &[0x04], &mut buf).unwrap();
 
         let raw = (buf[2] as u32) << 16 | (buf[1] as u32) << 8 | buf[0] as u32;
         let t_lin = self.calibration.t_lin;
