@@ -17,10 +17,10 @@ use go::ehal::digital::StatefulOutputPin;
 use go::entry;
 use go::pac::Interrupt;
 use go::pac::NVIC;
-use go::peripherals::i2c;
 use go::peripherals::i2c::I2c;
 use go::sensors::bmp;
 use go::sensors::bmp::Bmp;
+use go::sensors::imu::Imu;
 use go as bsp;
 use bsp::hal;
 use bsp::pac;
@@ -48,20 +48,14 @@ fn main() -> ! {
     let mut led = pins.led.into_push_pull_output();
     let mut delay = Delay::new(core.SYST, &mut clocks);
 
-    // let i2c = I2c::new((pins.sda, pins.scl), peripherals.sercom3, &mut clocks, &mut peripherals.pm);
+    let i2c = I2c::new_ref((pins.sda, pins.scl), peripherals.sercom3, &mut clocks, &mut peripherals.pm);
 
-    // let mut bmp = Bmp::new(i2c);
+    let mut bmp = Bmp::new(&i2c);
 
-    
+    let mut imu = Imu::new(&i2c); 
     loop {
-        warn!("waiting for usb");
-        // let temp = bmp.read_temperature();
-        // let press = bmp.read_pressure();
-        // let alt = bmp.get_altitude();
-
-        // info!("temperature {} c", &temp);
-        // info!("pressure {} Pa", &press);
-        // info!("alitude {} cm", &alt * 100.0);
+        // warn!("baro addr: 0x{:02x}, imu addr: 0x{:02x}", bmp.id(), imu.get_id());
+        imu.init();
 
         if ON.load(Relaxed) {
             led.set_high();
@@ -73,7 +67,7 @@ fn main() -> ! {
         //     warn!("{:?}", *MESSAGE.borrow(cs).borrow());
         // });
         
-        // delay.delay_ms(500u32);
+        delay.delay_ms(500u32);
     }
 }
 
