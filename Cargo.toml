@@ -20,11 +20,21 @@ libm = "0.2.16"
 defmt = "1.1.0"
 portable-atomic = "1.13.1"
 
+embassy-time = { version = "0.5.1", features = ["defmt", "tick-hz-1_000"] }
+embassy-time-driver = "0.2.2"
+embassy-executor = { version = "0.10.0", features = ["defmt", "executor-thread", "platform-cortex-m"] }
+
+bmp390-rs = { version = "0.4.0", features = ["uom"] }
+uom = { version = "0.37.0", features = ["f32", "si"], default-features = false }
+
+critical-section = "1.2.0"
+
 [features]
-default = ["rt", "usb", "async", "atsamd-hal/samd21g"]
+default = ["rt", "usb", "async", "dma", "atsamd-hal/samd21g"]
 rt = ["dep:cortex-m-rt", "atsamd-hal/samd21g-rt"]
 usb = ["atsamd-hal/usb", "dep:usb-device", "dep:usbd-serial",]
 async = ["atsamd-hal/async"]
+dma = ["atsamd-hal/dma"]
 
 [profile.dev]
 panic = "abort"

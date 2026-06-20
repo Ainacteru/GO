@@ -1,3 +1,3 @@
 pub mod usb;
 mod defmt;
-pub mod timestamp;
+pub mod time_driver;

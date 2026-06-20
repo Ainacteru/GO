@@ -1,10 +1,8 @@
-use core::{cell::RefCell, sync::atomic::Ordering::Relaxed};
+use core::{cell::RefCell};
 
 use atsamd_hal::{clock::GenericClockController, pac::Pm, usb::UsbBus};
 use cortex_m::{interrupt::Mutex, singleton};
 use atsamd_hal::pac::interrupt;
-use defmt::warn;
-use portable_atomic::AtomicUsize;
 use usb_device::{LangID, bus::UsbBusAllocator, device::{StringDescriptors, UsbDevice, UsbDeviceBuilder, UsbVidPid}};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
@@ -44,10 +42,6 @@ impl Usb {
     }
 }
 
-static MESSAGE: Mutex<RefCell<[u8; 64]>> = Mutex::new(RefCell::new([0; 64])); 
-static MESSAGE_LENGTH: AtomicUsize = AtomicUsize::new(0);
-
-
 fn poll_usb() {
     cortex_m::interrupt::free(|cs| {
         let mut serial_ref = USB_SERIAL.borrow(cs).borrow_mut();
@@ -62,28 +56,14 @@ fn poll_usb() {
             let mut buf = [0u8; 64];
 
             if let Ok(count) = serial.read(&mut buf) {
-
-                let message = &MESSAGE.borrow(cs).borrow();
-                
-                for &byte in &buf[..count] {
-                    match byte {
-                        b'\n' => {
-
-                            let msg = core::str::from_utf8(&message[..MESSAGE_LENGTH.swap(0, Relaxed)]).unwrap_or("");
-
-                            warn!("recieved {}", &msg);
-                        }
-
-                        _ => {
-                            let length = &MESSAGE_LENGTH.load(Relaxed);
-                            if length < &message.len() {
-                                MESSAGE.borrow(cs).borrow_mut()[*length] = byte;
-                                
-                                MESSAGE_LENGTH.fetch_add(1, Relaxed);
-                            } else {
-                                MESSAGE_LENGTH.store(0, Relaxed);
-                            }
-                        },
+                for (i, c) in buf.iter().enumerate() {
+                    let c = *c as char;
+                    if i >= count {
+                        break;
+                    }
+                    match c {
+                        '\r' => { serial.write(b"\r\n").ok(); }
+                        _ => { serial.write(&[c as u8]).ok(); }
                     }
                 }
             };

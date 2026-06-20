@@ -5,6 +5,7 @@ use portable_atomic::{Ordering};
 
 use crate::communcation::usb::USB_SERIAL;
 
+
 static USB_LOGGER: UsbLogger = UsbLogger::new();
 
 #[defmt::global_logger]
@@ -22,7 +23,7 @@ unsafe impl defmt::Logger for Logger {
 
     unsafe fn release() {
        USB_LOGGER.release();
-       cortex_m::interrupt::enable();
+        cortex_m::interrupt::enable();
     }
 
     unsafe fn write(bytes: &[u8]) {
@@ -45,8 +46,7 @@ impl UsbLogger {
 
     fn acquire(&self) {
         if self.taken.load(Ordering::Relaxed) {
-            return;
-            // panic!("defmt logger re-entered");
+            panic!("defmt logger re-entered");
         }
 
         self.taken.store(true, Ordering::Relaxed);
