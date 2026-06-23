@@ -2,15 +2,24 @@
 #![no_main]
 
 use atsamd_hal::{
-    clock::GenericClockController, dmac::{DmaController, PriorityLevel}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{CorePeripherals, Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::_atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin, sercom::i2c, timer::TimerCounter
+    clock::GenericClockController,
+    dmac::{Ch0, channel::ReadyFuture, Channel, DmaController, PriorityLevel},
+    gpio::{Output, PA17, Pin},
+    pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4},
+    prelude::_atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin,
+    sercom::i2c::{self, I2cFuture},
 };
-use bmp390_rs::typestate::Bmp390Builder;
-use defmt::{info};
-
+use defmt::{info, println};
+use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
-use embassy_time::Timer;
-use go::{Pins, communcation::{time_driver, usb::Usb}, peripherals::i2c::I2c, sensors::bmp::{self, Bmp}};
-use uom::si::{f32::{Length, Pressure, ThermodynamicTemperature}, length::{centimeter, meter}, pressure::pascal, thermodynamic_temperature::{degree_celsius, degree_fahrenheit}};
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use embassy_sync::mutex::Mutex;
+use embassy_time::{Delay, Timer};
+use go::{
+    Pins, communcation::{time_driver, usb::Usb}, peripherals::i2c::I2c, sensors::{bmp, imu},
+};
+use static_cell::StaticCell;
+use uom::si::{length::centimeter, pressure::pascal, thermodynamic_temperature::degree_fahrenheit};
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -18,10 +27,11 @@ atsamd_hal::bind_interrupts!(struct Irqs {
     DMAC => atsamd_hal::dmac::InterruptHandler;
 });
 
+type I2cBus = Mutex<NoopRawMutex, I2cFuture<i2c::Config<go::I2cPads>, Channel<Ch0, ReadyFuture>>>;
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let mut peripherals = Peripherals::take().unwrap();
-    let core = CorePeripherals::take().unwrap();
     let mut clocks = GenericClockController::with_external_32kosc(
         peripherals.gclk,
         &mut peripherals.pm,
@@ -32,44 +42,34 @@ async fn main(spawner: Spawner) {
     let pins = Pins::new(peripherals.port);
 
     Usb::set_up(&mut clocks, &mut peripherals.pm, pins.usb_dm, pins.usb_dp, peripherals.usb);
-    // timer::set_up(&mut clocks, peripherals.tc3, &mut peripherals.pm);
     time_driver::init(peripherals.tc3, &mut peripherals.pm, &mut clocks);
 
     enable_interrupts();
-        
-    let gclk0 = clocks.gclk0();
 
-        // Initialize DMA Controller
+    // Initialize DMA Controller
     let dmac = DmaController::init(peripherals.dmac, &mut peripherals.pm);
-
-    // Turn dmac into an async controller
     let mut dmac = dmac.into_future(Irqs);
-    // Get individual handles to DMA channels
     let channels = dmac.split();
-
-    // Initialize DMA Channel 0
     let channel0 = channels.0.init(PriorityLevel::Lvl0);
 
-    let delay = TimerCounter::tc4_(&clocks.tc4_tc5(&gclk0).unwrap(), peripherals.tc4, &mut peripherals.pm).into_future(Irqs);
+    let i2c = I2c::new((pins.sda, pins.scl), peripherals.sercom3, &mut clocks, &mut peripherals.pm)
+        .into_async(Irqs, channel0);
 
-    let i2c = I2c::new((pins.sda, pins.scl), peripherals.sercom3, &mut clocks, &mut peripherals.pm).into_async(Irqs, channel0);
+    // Shared I2C bus
+    static I2C_BUS: StaticCell<I2cBus> = StaticCell::new();
+    let i2c_bus = I2C_BUS.init(Mutex::new(i2c));
 
+    let mut imu = imu::Imu::new(I2cDevice::new(i2c_bus), Delay).await;
+    let mut bmp = bmp::Bmp::new(I2cDevice::new(i2c_bus), Delay).await.unwrap();
 
-    // let mut bmp = Bmp390Builder::new()
-    //     .use_i2c(i2c, bmp390_rs::SdoPinState::High)
-    //     .enable_temperature()
-    //     .enable_pressure()
-    //     .into_normal()
-    //     .build(bmp390_rs::ResetPolicy::Soft, delay).await.unwrap();
-
-    let mut bmp =  Bmp::new(i2c, delay).await.unwrap();
 
     let led = pins.led.into_push_pull_output();
-
     spawner.spawn(blink(led).unwrap());
 
-    Timer::after_millis(100).await;
+    Timer::after_millis(1000).await;
+
     loop {
+
         let mes = bmp.inner().read_latest_measurement().await.unwrap().into_uom();
         let temp = mes.temperature_celsius().get::<degree_fahrenheit>();
         let pres = mes.pressure_pascal();
@@ -78,6 +78,20 @@ async fn main(spawner: Spawner) {
         info!("Temperature: {} F", temp);
         info!("pressure: {} Pa", pres.get::<pascal>());
         info!("altitude: {} cm", alt);
+
+        println!("");
+
+        let accel_data = imu.get_accel_data().await;
+        info!("Accel x: {}", accel_data.x);
+        info!("Accel y: {}", accel_data.y);
+        info!("Accel z: {}", accel_data.z);
+
+        let gyro_data = imu.get_gyro_data().await;
+        info!("Gyro x: {}", gyro_data.x);
+        info!("Gyro y: {}", gyro_data.y);
+        info!("Gyro z: {}", gyro_data.z);
+
+        println!("");
         Timer::after_millis(100).await;
     }
 }
@@ -85,7 +99,6 @@ async fn main(spawner: Spawner) {
 fn enable_interrupts() {
     unsafe {
         NVIC::unmask(Interrupt::USB);
-        NVIC::unmask(Interrupt::TC3);
     }
 }
 

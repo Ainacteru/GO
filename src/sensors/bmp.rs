@@ -1,9 +1,8 @@
 use bmp390_rs::{
-    typestate::{Bmp390Builder, Bmp390Mode, Normal, NoPin, PressureAndTemperature},
-    bus::I2c as BmpI2c,
-    Bmp390Result, SdoPinState, ResetPolicy,
+    Bmp390Result, ResetPolicy, SdoPinState, bus::I2c as BmpI2c, typestate::{Bmp390Builder, Bmp390Mode, NoPin, Normal, PressureAndTemperature}
 };
 use atsamd_hal::ehal_async::{delay::DelayNs, i2c::I2c};
+use defmt::info;
 use uom::si::{f32::{Length, Pressure}, pressure::pascal};
 
 type Inner<B, D> = Bmp390Mode<Normal, PressureAndTemperature, BmpI2c<B>, NoPin, D, false>;
@@ -23,6 +22,8 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
             .build(ResetPolicy::Soft, delay)
             .await?;
 
+        info!("BMP390 id: {:#x}", 0x60_u8);
+
         Ok(Self {
             inner,
             prev_alt: Length::new::<uom::si::length::meter>(0.0),
@@ -31,7 +32,7 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
     pub fn inner(&mut self) -> &mut Inner<B, D> {
         &mut self.inner
     }
-    fn elevation_from_pressure(&self, pres: Pressure) -> Length {
+    pub fn elevation_from_pressure(&self, pres: Pressure) -> Length {
         let p = pres.get::<pascal>();
         let meters = 44_330.0 * (1.0 - libm::powf(p / 101_325.0, 0.19026));
         Length::new::<uom::si::length::meter>(meters)
@@ -41,11 +42,10 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
         let pres = mes.pressure_pascal();
         let elevation = self.elevation_from_pressure(pres);
 
-        if self.prev_alt.get::<uom::si::length::meter>() == 0.0  {
+        if self.prev_alt.get::<uom::si::length::meter>() == 0.0 {
             self.prev_alt = elevation;
         }
 
-        self.prev_alt - elevation
-
+        elevation - self.prev_alt
     }
 }
