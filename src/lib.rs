@@ -112,7 +112,7 @@ pub mod pins {
             /// Buzzer output
             name: buzzer
             aliases: {
-                PushPullOutput: Buzzer
+                AlternateE: Buzzer
             }
         }
         PA14 {

@@ -67,10 +67,7 @@ embassy_time_driver::time_driver_impl!(static DRIVER: Samd21Driver = Samd21Drive
 
 /// Initialize TC3 as the embassy time driver.
 /// Call this early in main, after clocks are configured.
-pub fn init(tc3: Tc3, pm: &mut crate::pac::Pm, clocks: &mut crate::hal::clock::GenericClockController) {
-    let gclk0 = clocks.gclk0();
-    let _clock = clocks.tcc2_tc3(&gclk0).unwrap();
-
+pub fn init(tc3: Tc3, pm: &mut crate::pac::Pm) {
     // Enable TC3 in PM
     pm.apbcmask().modify(|_, w| w.tc3_().set_bit());
 
