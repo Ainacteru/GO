@@ -38,6 +38,8 @@ flash: $(UF2)
 # 	echo "Found GROSSBOOT!"; \
 	
 	$(UF2CONV) $(UF2) -f 0x68ed2b88 -D
+
+# 	@echo $$($$(shell size (BIN)/1000)k / 250k remaining
 	
 clean:
 	cargo clean
