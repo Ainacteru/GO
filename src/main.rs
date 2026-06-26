@@ -1,27 +1,22 @@
 #![no_std]
 #![no_main]
 
+use core::str::from_utf8;
+
 use atsamd_hal::{
-    clock::{GenericClockController, Tcc2Tc3Clock}, dmac::{Ch0, Channel, DmaController, PriorityLevel, channel::ReadyFuture}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::{_atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin, _embedded_hal_Pwm}, pwm::{self, Pwm2}, sercom::i2c::{self, I2cFuture},
+    clock::GenericClockController, dmac::{DmaController, PriorityLevel}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::{_atsamd_hal_embedded_hal_digital_v2_OutputPin, _atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin}, sercom::Sercom4,
 };
-use defmt::{info, println};
-use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
+use defmt::{info, warn};
 use embassy_executor::Spawner;
-use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use embassy_sync::mutex::Mutex;
-use embassy_time::{Delay, Timer};
-use go::{ Buzzer as buzzzzz, Pins, communcation::{time_driver, usb::Usb}, indicators::buzzer::Buzzer, pac::Tcc2, peripherals::i2c::I2c, sensors::{bmp, imu},
-};
-use static_cell::StaticCell;
-use uom::si::{length::centimeter, pressure::pascal, thermodynamic_temperature::degree_fahrenheit};
+use embassy_time::Timer;
+use go::{ Pins, communcation::{time_driver, usb::Usb}, storage::flash::W25Q };
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
     TC4 => atsamd_hal::timer::InterruptHandler<Tc4>;
     DMAC => atsamd_hal::dmac::InterruptHandler;
+    SERCOM4 => atsamd_hal::sercom::spi::InterruptHandler<Sercom4>;
 });
-
-// type I2cBus = Mutex<NoopRawMutex, I2cFuture<i2c::Config<go::I2cPads>, Channel<Ch0, ReadyFuture>>>;
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -32,12 +27,12 @@ async fn main(spawner: Spawner) {
         &mut peripherals.sysctrl,
         &mut peripherals.nvmctrl,
     );
-    let glck0 = clocks.gclk0();
+    let gclk0 = clocks.gclk0();
 
     let pins = Pins::new(peripherals.port);
 
     Usb::set_up(&mut clocks, &mut peripherals.pm, pins.usb_dm, pins.usb_dp, peripherals.usb);
-    let tcc2_tc3_clock = clocks.tcc2_tc3(&glck0).expect("no tcc2");
+    clocks.tcc2_tc3(&gclk0).expect("no tcc2"); // keep bc you have to set up tc3
     time_driver::init(peripherals.tc3, &mut peripherals.pm);
 
     enable_interrupts();
@@ -45,65 +40,67 @@ async fn main(spawner: Spawner) {
     let led = pins.led.into_push_pull_output();
     spawner.spawn(blink(led).unwrap());
 
-    let b: buzzzzz = pins.buzzer.into();
+    // Deselect the other SPI devices so they don't drive MISO
+    let mut sd_cs = pins.sd_cs.into_push_pull_output();
+    sd_cs.set_high().unwrap();
+    let mut rf_cs = pins.rf_cs.into_push_pull_output();
+    rf_cs.set_high().unwrap();
 
-    let tcc2 = Pwm2::new(&tcc2_tc3_clock, 440.Hz(), peripherals.tcc2, &mut peripherals.pm);
-    let mut buz = Buzzer::new(b, tcc2);
-    
-    buz.set_volume(0);
+    // WP (FLASH_EN) high = writes allowed
+    let mut flash_wp = pins.flash_en.into_push_pull_output();
+    flash_wp.set_high().unwrap();
 
-    Timer::after_millis(1000).await;
+    // Setup DMA
+    let dmac = DmaController::init(peripherals.dmac, &mut peripherals.pm);
+    let mut dmac = dmac.into_future(Irqs);
+    let channels = dmac.split();
+    let chan0 = channels.0.init(PriorityLevel::Lvl0);
+    let chan1 = channels.1.init(PriorityLevel::Lvl0);
+
+    let mut spi = go::spi_master(
+        &mut clocks,
+        100.kHz(),
+        peripherals.sercom4,
+        &mut peripherals.pm,
+        pins.sclk,
+        pins.mosi,
+        pins.miso,
+    )
+    .into_future(Irqs)
+    .with_dma_channels(chan0, chan1);
+
+    let mut cs = pins.flash_cs.into_push_pull_output();
+    cs.set_high().unwrap();
+
+    let mut flash = W25Q::new(&mut spi, &mut cs);
+
+    Timer::after_millis(2000).await;
+
+    let jedec = flash.jedec_id().await;
+    info!("JEDEC ID: {:02x}", jedec);
+
+    flash.erase_sector(0).await;
+    info!("erased sector 0");
+
+    flash.write(0x0, b"hello flash").await;
+    info!("wrote message");
+
     loop {
-        use go::indicators::buzzer::Note::*;
-
-        // "Hot cross buns"
-        buz.set_volume(20);
-        buz.set_note(B4); Timer::after_millis(500).await;
-        buz.set_note(A4); Timer::after_millis(500).await;
-        buz.set_note(G4); Timer::after_millis(500).await;
-        buz.set_volume(0); Timer::after_millis(500).await;
-
-
-
-        // "Hot cross buns"
-        buz.set_volume(20);
-        buz.set_note(B4); Timer::after_millis(500).await;
-        buz.set_note(A4); Timer::after_millis(500).await;
-        buz.set_note(G4); Timer::after_millis(500).await;
-        buz.set_volume(0); Timer::after_millis(500).await;
-
-        // "One a penny, two a penny"
-        buz.set_volume(20); 
-        buz.set_note(G4); Timer::after_millis(200).await;
-        buz.set_volume(0); Timer::after_millis(50).await;
-        buz.set_volume(20); Timer::after_millis(200).await;
-        buz.set_volume(0); Timer::after_millis(50).await;
-        buz.set_volume(20); Timer::after_millis(200).await;
-        buz.set_volume(0); Timer::after_millis(50).await;
-        buz.set_volume(20); Timer::after_millis(200).await;
-        buz.set_volume(0); Timer::after_millis(50).await;
-        buz.set_volume(20);
-        buz.set_note(A4); Timer::after_millis(200).await;
-        buz.set_volume(0); Timer::after_millis(50).await;
-        buz.set_volume(20); Timer::after_millis(200).await;
-        buz.set_volume(0); Timer::after_millis(50).await;
-        buz.set_volume(20); Timer::after_millis(200).await;
-        buz.set_volume(0); Timer::after_millis(50).await;
-        buz.set_volume(20); Timer::after_millis(200).await;
-
-        // "Hot cross buns"
-        buz.set_note(B4); Timer::after_millis(500).await;
-        buz.set_note(A4); Timer::after_millis(500).await;
-        buz.set_note(G4); Timer::after_millis(500).await;
-        buz.set_volume(0); Timer::after_millis(500).await;
-
-        Timer::after_millis(1000).await;
+        let mut buf = [0u8; 11];
+        flash.read(0x0, &mut buf).await;
+        match from_utf8(&buf) {
+            Ok(msg) => info!("read back: {}", msg),
+            Err(_) => warn!("non-utf8: {:02x}", buf),
+        }
+        Timer::after_millis(500).await;
     }
 }
 
 fn enable_interrupts() {
     unsafe {
         NVIC::unmask(Interrupt::USB);
+        NVIC::unmask(Interrupt::DMAC);
+        NVIC::unmask(Interrupt::SERCOM4);
     }
 }
 
