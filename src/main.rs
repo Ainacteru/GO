@@ -9,7 +9,7 @@ use atsamd_hal::{
 use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_time::Timer;
-use go::{ Pins, communcation::{time_driver, usb::Usb}, storage::flash::W25Q };
+use go::{ Pins, communcation::{time_driver, usb::Usb}, storage::{flash::W25Q, flash_writer::{FlashWriter, RecordType}} };
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -70,24 +70,19 @@ async fn main(spawner: Spawner) {
     .with_dma_channels(chan0, chan1);
 
     let mut cs = pins.flash_cs.into_push_pull_output();
-    cs.set_high().unwrap();
-
-    let mut flash = W25Q::new(&mut spi, &mut cs);
 
     Timer::after_millis(2000).await;
 
-    let jedec = flash.jedec_id().await;
-    info!("JEDEC ID: {:02x}", jedec);
+    let mut flash = W25Q::new(&mut spi, &mut cs).await;
 
-    flash.erase_sector(0).await;
-    info!("erased sector 0");
+    let mut writer = FlashWriter::new(&mut flash).await;
 
-    flash.write(0x0, b"hello flash").await;
-    info!("wrote message");
+    writer.write(RecordType::MESSAGE, "hello!!!".as_bytes()).await.unwrap();
+    // info!("wrote message");
 
     loop {
-        let mut buf = [0u8; 11];
-        flash.read(0x0, &mut buf).await;
+        let mut buf = [0u8; 8];
+        writer.read(0x0, &mut buf).await;
         match from_utf8(&buf) {
             Ok(msg) => info!("read back: {}", msg),
             Err(_) => warn!("non-utf8: {:02x}", buf),
