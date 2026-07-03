@@ -1,6 +1,9 @@
 
+use core::str::{Utf8Error, from_utf8};
+
 use atsamd_hal::{ehal_async::spi::SpiBus, prelude::_atsamd_hal_embedded_hal_digital_v2_OutputPin};
-use defmt::info;
+use defmt::{info, warn};
+use uom::si::{f32::Time, time::millisecond};
 use crate::storage::{error::FlashError, flash::W25Q, flash_writer::RecordType::{BARO, EVENT, IMU, MESSAGE, OTHER}};
 
 const CAPACITY: u32 = 2097152; // 2 * 1024 * 1024 == 2 MiB
@@ -11,19 +14,33 @@ pub struct FlashWriter <'a, 'b, SPI, CS> {
     erased: u32
 }
 
-/// Create new flash writer and starting the next write where it was previously left off at
 impl<'a, 'b, SPI, CS> FlashWriter<'a, 'b, SPI, CS>
 where
     SPI: SpiBus<u8>,
     CS: _atsamd_hal_embedded_hal_digital_v2_OutputPin, 
 {
+    /// Return new flash writer and starting the next write where it was previously left off at
+    pub async fn resume(w25: &'a mut W25Q<'b, SPI, CS>) -> Self {
+        let mut writer = Self {
+            flash: w25,
+            cursor: 0x00,
+            erased: 0
+        };
+        writer.find_cursor().await;
+
+        writer
+    }
+
+    /// ERASES the chip or sector before returning
     pub async fn new(w25: &'a mut W25Q<'b, SPI, CS>) -> Self {
         let mut writer = Self {
             flash: w25,
             cursor: 0x00,
             erased: 0
         };
-        writer.resume().await;
+        writer.erase_sector(0x00).await;
+        warn!("erasing sector!");
+        writer.find_cursor().await;
 
         writer
     }
@@ -70,16 +87,17 @@ where
     }
 
     
-    pub async fn read<'c>(&mut self, addr: u32) -> Record {
+    pub async fn read(&mut self, addr: u32) -> Record {
         let mut header = [0u8; 6];  
         let mut message = [0u8; 255];
         self.flash.read(addr, &mut header).await;
         self.flash.read(addr + header.len() as u32, &mut message).await;
 
-        Record::from_header(&header, &message)
+        Record::from_header(&header, message)
     }
 
-    async fn resume(&mut self) {
+    /// Looks for the next place to write by setting the cursor there
+    async fn find_cursor(&mut self) {
         let mut current_addr: u32 = 0x00;
         let mut header = [0u8; 6];
         self.flash.read(current_addr, &mut header).await;
@@ -96,15 +114,15 @@ where
     }
 }
 
-pub struct Record<'a> {
+pub struct Record {
     rtype: RecordType,
     timestamp: u32,
     length: u8,
-    message: &'a [u8],
+    message: [u8; 255],
 }
 
-impl<'a> Record<'a> {
-    pub fn from_header(header: &[u8], message: &'a [u8]) -> Self {
+impl Record {
+    pub fn from_header(header: &[u8], message: [u8; 255]) -> Self {
         Self {
             rtype: header[0].into(),
             timestamp: u32::from_le_bytes(header[1..5].try_into().unwrap()),
@@ -113,7 +131,7 @@ impl<'a> Record<'a> {
         }
     }
 
-    pub fn new(rtype: RecordType, timestamp: u32, message: &'a mut [u8]) -> Self{
+    pub fn new(rtype: RecordType, timestamp: u32, message: [u8; 255]) -> Self{
         Self {
             rtype,
             timestamp,
@@ -121,9 +139,21 @@ impl<'a> Record<'a> {
             message,
         }
     }
+
+    pub fn get_record_type(&self) -> &str {
+        self.rtype.into_str()
+    }
+    /// Returns the 
+    pub fn get_timestamp(&self) -> Time {
+        Time::new::<millisecond>(self.timestamp as f32)
+    }
+    pub fn get_message(&self) -> Result<&str, Utf8Error> {
+        from_utf8(&self.message[..self.length as usize])
+    }
 }
 
 #[repr(u8)]
+#[derive(Debug)]
 pub enum RecordType {
     MESSAGE = 0,
     IMU = 1,
@@ -143,5 +173,18 @@ impl From<u8> for RecordType {
             _ => OTHER,
         }
     }
-    
+}
+
+
+impl RecordType {
+    #[allow(clippy::wrong_self_convention)]
+    fn into_str(&self) -> &str {
+        match self {
+            MESSAGE => "MESSAGE",
+            IMU => "IMU",
+            BARO => "BARO",
+            EVENT => "EVENT",
+            OTHER => "OTHER",
+        }
+    }
 }

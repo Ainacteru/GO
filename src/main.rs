@@ -10,6 +10,7 @@ use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_time::Timer;
 use go::{ Pins, communcation::{time_driver, usb::Usb}, storage::{flash::W25Q, flash_writer::{FlashWriter, RecordType}} };
+use uom::si::time::millisecond;
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -74,17 +75,19 @@ async fn main(spawner: Spawner) {
 
     let mut flash = W25Q::new(&mut spi, &mut cs).await;
 
-    let mut writer = FlashWriter::new(&mut flash).await;
+    let mut writer = FlashWriter::resume(&mut flash).await;
 
-    writer.erase_sector(0x00).await;
-
-    writer.write(RecordType::MESSAGE, "hello!!!".as_bytes()).await.unwrap();
+    writer.write(RecordType::MESSAGE, "hello format".as_bytes()).await.unwrap();
     info!("wrote message");
+
+    info!("reading ");
     
-    let mut buf = [0u8; 10];
-    writer.read(0x0, &mut buf).await;
-    let msg = str::from_utf8(&buf).unwrap();
-    info!("read back: {}", msg);
+    let msg = writer.read(0x00).await;
+
+    let t = msg.get_record_type();
+    let s = msg.get_timestamp().get::<millisecond>();
+    let m = msg.get_message().unwrap();
+    info!("read back: rtype: {}; time: {} ms; msg: {};", t, s, m);
     
 
     // loop {

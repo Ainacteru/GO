@@ -36,6 +36,7 @@ static_cell = { version = "2.1.0" }
 embedded-sdmmc = { version = "0.9.0", default-features = false }
 embedded-hal-bus = { version = "0.3.0", features = ["async", "defmt-03"] }
 thiserror = { version = "2.0.18", default-features = false }
+# heapless = { version = "0.9.3", features = ["defmt"] }
 
 [features]
 default = ["rt", "usb", "async", "dma", "atsamd-hal/samd21g"]
