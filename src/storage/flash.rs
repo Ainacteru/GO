@@ -24,7 +24,7 @@ where
         let mut buf: [u8; 6] = [0x4B, 0, 0, 0, 0, 0];
         flash.xfer(&mut buf).await;
 
-        assert_eq!(flash.jedec_id().await, [0xef, 0x40, 0x15]);
+        // assert_eq!(flash.jedec_id().await, [0xef, 0x40, 0x15]);
         info!("Found flash chip with id: {:#02x}", &buf[5]);
 
         flash

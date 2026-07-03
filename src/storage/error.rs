@@ -1,18 +1,13 @@
-use core::{error::Error, fmt::{Debug, Display}};
+use core::fmt::Debug;
 
-#[derive(Debug)]
+use thiserror::Error;
+
+#[derive(Error, Debug)]
 pub enum FlashError {
+    #[error("Message out of bounds")]
     OutOfBounds,
+    #[error("Message too large")]
     RecordTooLarge,
-}
-
-impl Error for FlashError {}
-
-impl Display for FlashError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::OutOfBounds => write!(f, "OutOfBounds"),
-            Self::RecordTooLarge => write!(f, "RecordTooLarge"),
-        }
-    }
+    #[error("Message not valid UTF-8")]
+    BadUTF8,
 }

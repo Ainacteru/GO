@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use core::str::from_utf8;
+use core::str::{self, from_utf8};
 
 use atsamd_hal::{
     clock::GenericClockController, dmac::{DmaController, PriorityLevel}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::{_atsamd_hal_embedded_hal_digital_v2_OutputPin, _atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin}, sercom::Sercom4,
@@ -28,7 +28,6 @@ async fn main(spawner: Spawner) {
         &mut peripherals.nvmctrl,
     );
     let gclk0 = clocks.gclk0();
-
     let pins = Pins::new(peripherals.port);
 
     Usb::set_up(&mut clocks, &mut peripherals.pm, pins.usb_dm, pins.usb_dp, peripherals.usb);
@@ -77,18 +76,26 @@ async fn main(spawner: Spawner) {
 
     let mut writer = FlashWriter::new(&mut flash).await;
 
-    writer.write(RecordType::MESSAGE, "hello!!!".as_bytes()).await.unwrap();
-    // info!("wrote message");
+    writer.erase_sector(0x00).await;
 
-    loop {
-        let mut buf = [0u8; 8];
-        writer.read(0x0, &mut buf).await;
-        match from_utf8(&buf) {
-            Ok(msg) => info!("read back: {}", msg),
-            Err(_) => warn!("non-utf8: {:02x}", buf),
-        }
-        Timer::after_millis(500).await;
-    }
+    writer.write(RecordType::MESSAGE, "hello!!!".as_bytes()).await.unwrap();
+    info!("wrote message");
+    
+    let mut buf = [0u8; 10];
+    writer.read(0x0, &mut buf).await;
+    let msg = str::from_utf8(&buf).unwrap();
+    info!("read back: {}", msg);
+    
+
+    // loop {
+    //     let mut buf = [0u8; 8];
+    //     writer.read(0x0, &mut buf).await;
+    //     match from_utf8(&buf) {
+    //         Ok(msg) => info!("read back: {}", msg),
+    //         Err(_) => warn!("non-utf8: {:02x}", buf),
+    //     }
+    //     Timer::after_millis(500).await;
+    // }
 }
 
 fn enable_interrupts() {

@@ -1,6 +1,7 @@
-use atsamd_hal::{ehal_async::spi::SpiBus, prelude::_atsamd_hal_embedded_hal_digital_v2_OutputPin} ;
 
-use crate::storage::{error::FlashError, flash::W25Q};
+use atsamd_hal::{ehal_async::spi::SpiBus, prelude::_atsamd_hal_embedded_hal_digital_v2_OutputPin};
+use defmt::info;
+use crate::storage::{error::FlashError, flash::W25Q, flash_writer::RecordType::{BARO, EVENT, IMU, MESSAGE, OTHER}};
 
 const CAPACITY: u32 = 2097152; // 2 * 1024 * 1024 == 2 MiB
 
@@ -60,26 +61,65 @@ where
         Ok(())
     }
 
-    pub async fn wipe_flash(&mut self) {
+    pub async fn erase_chip(&mut self) {
         self.flash.erase_chip().await;
     }
 
-    pub async fn read(&mut self, addr: u32, out: &mut [u8]) {
-        self.flash.read(addr, out).await;
+    pub async fn erase_sector(&mut self, sector: u32) {
+        self.flash.erase_sector(sector).await;
+    }
+
+    
+    pub async fn read<'c>(&mut self, addr: u32) -> Record {
+        let mut header = [0u8; 6];  
+        let mut message = [0u8; 255];
+        self.flash.read(addr, &mut header).await;
+        self.flash.read(addr + header.len() as u32, &mut message).await;
+
+        Record::from_header(&header, &message)
     }
 
     async fn resume(&mut self) {
         let mut current_addr: u32 = 0x00;
         let mut header = [0u8; 6];
-        self.read(current_addr, &mut header).await;
+        self.flash.read(current_addr, &mut header).await;
 
         while header[0] != 0xFF && current_addr < CAPACITY {
             current_addr += header.len() as u32 + header[5] as u32;
-            self.read(current_addr, &mut header).await;
+            self.flash.read(current_addr, &mut header).await;
         }
 
         self.cursor = current_addr;
         self.erased = self.cursor.div_ceil(4096) * 4096;
+        info!("Flash writer continuing at {:#02x}", &self.cursor);
+
+    }
+}
+
+pub struct Record<'a> {
+    rtype: RecordType,
+    timestamp: u32,
+    length: u8,
+    message: &'a [u8],
+}
+
+impl<'a> Record<'a> {
+    pub fn from_header(header: &[u8], message: &'a [u8]) -> Self {
+        Self {
+            rtype: header[0].into(),
+            timestamp: u32::from_le_bytes(header[1..5].try_into().unwrap()),
+            length: header[5],
+            message,
+        }
+    }
+
+    pub fn new(rtype: RecordType, timestamp: u32, message: &'a mut [u8]) -> Self{
+        Self {
+            rtype,
+            timestamp,
+            length: message.len() as u8,
+            message,
+        }
     }
 }
 
@@ -89,4 +129,19 @@ pub enum RecordType {
     IMU = 1,
     BARO = 2,
     EVENT = 3,
+    OTHER = 255,
+}
+
+impl From<u8> for RecordType {
+    
+    fn from(value: u8) -> Self {
+        match value {
+            0 => MESSAGE,
+            1 => IMU,
+            2 => BARO,
+            3 => EVENT,
+            _ => OTHER,
+        }
+    }
+    
 }

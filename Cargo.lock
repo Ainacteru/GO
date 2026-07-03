@@ -704,6 +704,7 @@ dependencies = [
  "micromath",
  "portable-atomic",
  "static_cell",
+ "thiserror",
  "uom",
  "usb-device",
  "usbd-serial",
