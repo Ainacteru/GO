@@ -6,6 +6,7 @@ pub mod actuators;
 pub mod indicators;
 pub mod sensors;
 pub mod peripherals;
+pub mod storage;
 
 #[cfg(feature = "rt")]
 pub use cortex_m_rt::entry;
@@ -288,4 +289,21 @@ pub fn usb_allocator(
     let clock = &clocks.usb(&gclk0).unwrap();
     let (dm, dp) = (dm.into(), dp.into());
     UsbBusAllocator::new(UsbBus::new(clock, pm, dm, dp, usb))
+}
+
+/// A no-op output pin for control signals that are hardwired on the PCB
+/// (e.g. the flash HOLD pin tied high through a pull-up).
+pub struct NoPin;
+
+impl ehal::digital::ErrorType for NoPin {
+    type Error = core::convert::Infallible;
+}
+
+impl ehal::digital::OutputPin for NoPin {
+    fn set_low(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
+    fn set_high(&mut self) -> Result<(), Self::Error> {
+        Ok(())
+    }
 }
