@@ -8,7 +8,7 @@ use atsamd_hal::{
 };
 
 pub struct I2c {
-    pub i2c: go::I2c,
+    i2c: go::I2c,
 }
 
 impl I2c {

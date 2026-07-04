@@ -1,16 +1,19 @@
 #![no_std]
 #![no_main]
 
-use core::str::{self, from_utf8};
 
 use atsamd_hal::{
     clock::GenericClockController, dmac::{DmaController, PriorityLevel}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::{_atsamd_hal_embedded_hal_digital_v2_OutputPin, _atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin}, sercom::Sercom4,
 };
-use defmt::{info, warn};
+use block_device_adapters::BufStream;
+use defmt::warn;
 use embassy_executor::Spawner;
-use embassy_time::Timer;
-use go::{ Pins, communcation::{time_driver, usb::Usb}, storage::{flash::W25Q, flash_writer::{FlashWriter, RecordType}} };
-use uom::si::time::millisecond;
+use embassy_time::{Delay, Timer};
+use embedded_fatfs::{FileSystem, FsOptions};
+use embedded_hal_bus::spi::ExclusiveDevice;
+use embedded_io_async::Write;
+use go::{ Pins, communcation::{time_driver, usb::Usb}, peripherals::spi::Spi };
+use sdspi::SdSpi;
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -32,7 +35,7 @@ async fn main(spawner: Spawner) {
     let pins = Pins::new(peripherals.port);
 
     Usb::set_up(&mut clocks, &mut peripherals.pm, pins.usb_dm, pins.usb_dp, peripherals.usb);
-    clocks.tcc2_tc3(&gclk0).expect("no tcc2"); // keep bc you have to set up tc3
+    clocks.tcc2_tc3(&gclk0).expect("no tcc2"); // keep bc you have to set up tc3 for embassy
     time_driver::init(peripherals.tc3, &mut peripherals.pm);
 
     enable_interrupts();
@@ -41,14 +44,10 @@ async fn main(spawner: Spawner) {
     spawner.spawn(blink(led).unwrap());
 
     // Deselect the other SPI devices so they don't drive MISO
-    let mut sd_cs = pins.sd_cs.into_push_pull_output();
-    sd_cs.set_high().unwrap();
+    let mut flash_cs = pins.flash_cs.into_push_pull_output();
+    flash_cs.set_high().unwrap();
     let mut rf_cs = pins.rf_cs.into_push_pull_output();
     rf_cs.set_high().unwrap();
-
-    // WP (FLASH_EN) high = writes allowed
-    let mut flash_wp = pins.flash_en.into_push_pull_output();
-    flash_wp.set_high().unwrap();
 
     // Setup DMA
     let dmac = DmaController::init(peripherals.dmac, &mut peripherals.pm);
@@ -57,48 +56,41 @@ async fn main(spawner: Spawner) {
     let chan0 = channels.0.init(PriorityLevel::Lvl0);
     let chan1 = channels.1.init(PriorityLevel::Lvl0);
 
-    let mut spi = go::spi_master(
-        &mut clocks,
-        100.kHz(),
-        peripherals.sercom4,
-        &mut peripherals.pm,
-        pins.sclk,
-        pins.mosi,
-        pins.miso,
-    )
-    .into_future(Irqs)
-    .with_dma_channels(chan0, chan1);
+    let mut spi = Spi::new((pins.sclk, pins.mosi, pins.miso), peripherals.sercom4, 400.kHz(), &mut clocks, &mut peripherals.pm).into_async(Irqs, (chan0, chan1));
 
-    let mut cs = pins.flash_cs.into_push_pull_output();
+    let mut cs = pins.sd_cs.into_push_pull_output();
+    
+    loop {
+        match sdspi::sd_init(&mut spi, &mut cs).await {
+            Ok(_) => break,
+            Err(_) => { warn!("sd_init failed"); Timer::after_millis(10).await; }
+        }
+    }
+
+    let dev = ExclusiveDevice::new(spi, cs, Delay).unwrap();
+
+    let mut sd = SdSpi::<_, _, aligned::A1>::new(dev, embassy_time::Delay);
+    loop {
+        if sd.init().await.is_ok() { break; }
+        defmt::info!("retrying card init...");
+        Timer::after_millis(10).await;
+    }
+
+    let inner = BufStream::<_, 512>::new(sd);
+    let fs = FileSystem::new(inner, FsOptions::new()).await.unwrap();
+
+    {
+        let root = fs.root_dir();
+        let mut file = root.create_file("test.txt").await.unwrap();
+        file.write_all(b"hello\n").await.unwrap();
+        file.flush().await.unwrap();
+    }
+
+    fs.unmount().await.unwrap();
 
     Timer::after_millis(2000).await;
 
-    let mut flash = W25Q::new(&mut spi, &mut cs).await;
-
-    let mut writer = FlashWriter::resume(&mut flash).await;
-
-    writer.write(RecordType::MESSAGE, "hello format".as_bytes()).await.unwrap();
-    info!("wrote message");
-
-    info!("reading ");
     
-    let msg = writer.read(0x00).await;
-
-    let t = msg.get_record_type();
-    let s = msg.get_timestamp().get::<millisecond>();
-    let m = msg.get_message().unwrap();
-    info!("read back: rtype: {}; time: {} ms; msg: {};", t, s, m);
-    
-
-    // loop {
-    //     let mut buf = [0u8; 8];
-    //     writer.read(0x0, &mut buf).await;
-    //     match from_utf8(&buf) {
-    //         Ok(msg) => info!("read back: {}", msg),
-    //         Err(_) => warn!("non-utf8: {:02x}", buf),
-    //     }
-    //     Timer::after_millis(500).await;
-    // }
 }
 
 fn enable_interrupts() {
