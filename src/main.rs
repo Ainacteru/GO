@@ -6,13 +6,13 @@ use atsamd_hal::{
     clock::GenericClockController, dmac::{DmaController, PriorityLevel}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::{_atsamd_hal_embedded_hal_digital_v2_OutputPin, _atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin}, sercom::Sercom4,
 };
 use block_device_adapters::BufStream;
-use defmt::warn;
+use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_time::{Delay, Timer};
 use embedded_fatfs::{FileSystem, FsOptions};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_io_async::Write;
-use go::{ Pins, communcation::{time_driver, usb::Usb}, peripherals::spi::Spi };
+use go::{ Pins, communcation::{time_driver, usb::Usb}, peripherals::spi::Spi, storage::sd::{self, SDCard} };
 use sdspi::SdSpi;
 
 atsamd_hal::bind_interrupts!(struct Irqs {
@@ -61,35 +61,21 @@ async fn main(spawner: Spawner) {
 
     let cs = pins.sd_cs.into_push_pull_output();
 
-    // Wait for the defmt probe to attach so we see every line
+    info!("creating sd card");
     Timer::after_millis(2000).await;
 
     // Wrap bus + CS into an SpiDevice for sdspi
     let dev = ExclusiveDevice::new(spi, cs, Delay).unwrap();
-    let mut sd = SdSpi::<_, _, aligned::A1>::new(dev, embassy_time::Delay);
+    let mut sd = SDCard::new(dev).await.unwrap();
+    sd.init_fs().await.unwrap();
 
-    loop {
-        if sd.init().await.is_ok() { break; }
-        warn!("card init retry...");
-        Timer::after_millis(100).await;
-    }
-    warn!("card initialized");
+    sd.write_file("hello.txt", b"hello!!").await.unwrap();
+    info!("wrote hello!!");
 
-    // Mount FAT and write a test file
-    let inner = BufStream::<_, 512>::new(sd);
-    let fs = FileSystem::new(inner, FsOptions::new()).await.unwrap();
-    {
-        let root = fs.root_dir();
-        let mut file = root.create_file("test.py").await.unwrap();
-        file.write_all(b"print(\"hmwhahahah n\")\n").await.unwrap();
-        file.flush().await.unwrap();
-    }
-    fs.unmount().await.unwrap();
-    warn!("file written and unmounted");
+    sd.unmount().await.unwrap();
 
-    loop {
-        Timer::after_millis(1000).await;
-    }
+    info!("unmounted!");
+
 }
 
 fn enable_interrupts() {
