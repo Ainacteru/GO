@@ -8,6 +8,16 @@ pub enum FlashError {
     OutOfBounds,
     #[error("Message too large")]
     RecordTooLarge,
-    #[error("Message not valid UTF-8")]
-    BadUTF8,
 }
+
+#[derive(Error, Debug)]
+  pub enum SDCardError {
+      #[error("SD card timed out")]
+      Timeout,
+      #[error("No SD card")]
+      NoSDCard,
+      #[error("filesystem not mounted")]
+      NotMounted,
+      #[error("io error")]
+      Io,
+  }

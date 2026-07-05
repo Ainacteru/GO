@@ -15,6 +15,8 @@ where
     CS: _atsamd_hal_embedded_hal_digital_v2_OutputPin,
 {
     pub async fn new(spi: &'a mut SPI, cs: &'a mut CS) -> Self {
+
+        cs.set_high().ok();
         let mut flash = Self { 
             spi, 
             cs, 
