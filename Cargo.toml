@@ -38,7 +38,7 @@ thiserror = { version = "2.0.18", default-features = false }
 # heapless = { version = "0.9.3", features = ["defmt"] }
 
 # sd card
-embedded-fatfs = { git = "https://github.com/MabezDev/embedded-fatfs", rev = "518528c", default-features = false, features = ["lfn", "defmt"] }
+embedded-fatfs = { git = "https://github.com/MabezDev/embedded-fatfs", rev = "518528c", default-features = false, features = ["lfn"] }
 sdspi = { git = "https://github.com/MabezDev/embedded-fatfs", rev = "518528c" }
 block-device-adapters = { git = "https://github.com/MabezDev/embedded-fatfs", rev = "518528c", features = ["defmt"] }
 aligned = "0.4.2"

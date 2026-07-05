@@ -32,4 +32,17 @@ impl Spi {
         self.spi.into_future(iqrs).with_dma_channels(dma_channel.0, dma_channel.1)
     }
 
+    /// Async SPI without DMA. Commands use full-duplex word-by-word transfers,
+    /// which frame correctly for SD/flash command bytes (the DMA path does a
+    /// TX-only transfer that can misframe single commands).
+    pub fn into_async_nodma<I>(self, irqs: I) -> SpiFuture<spi::Config<go::SpiPads>, spi::Duplex>
+    where
+        I: atsamd_hal::async_hal::interrupts::Binding<
+            <go::SpiSercom as atsamd_hal::sercom::Sercom>::Interrupt,
+            InterruptHandler<go::SpiSercom>,
+        >,
+    {
+        self.spi.into_future(irqs)
+    }
+
 }

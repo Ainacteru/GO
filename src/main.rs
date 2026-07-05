@@ -49,48 +49,47 @@ async fn main(spawner: Spawner) {
     let mut rf_cs = pins.rf_cs.into_push_pull_output();
     rf_cs.set_high().unwrap();
 
-    // Setup DMA
+    // Setup DMA (kept for the flash bus later; SD uses non-DMA SPI)
     let dmac = DmaController::init(peripherals.dmac, &mut peripherals.pm);
     let mut dmac = dmac.into_future(Irqs);
     let channels = dmac.split();
-    let chan0 = channels.0.init(PriorityLevel::Lvl0);
-    let chan1 = channels.1.init(PriorityLevel::Lvl0);
+    let _chan0 = channels.0.init(PriorityLevel::Lvl0);
+    let _chan1 = channels.1.init(PriorityLevel::Lvl0);
 
-    let mut spi = Spi::new((pins.sclk, pins.mosi, pins.miso), peripherals.sercom4, 400.kHz(), &mut clocks, &mut peripherals.pm).into_async(Irqs, (chan0, chan1));
+    // Non-DMA async SPI: full-duplex word-by-word writes frame SD commands correctly
+    let spi = Spi::new((pins.sclk, pins.mosi, pins.miso), peripherals.sercom4, 400.kHz(), &mut clocks, &mut peripherals.pm).into_async_nodma(Irqs);
 
-    let mut cs = pins.sd_cs.into_push_pull_output();
-    
-    loop {
-        match sdspi::sd_init(&mut spi, &mut cs).await {
-            Ok(_) => break,
-            Err(_) => { warn!("sd_init failed"); Timer::after_millis(10).await; }
-        }
-    }
+    let cs = pins.sd_cs.into_push_pull_output();
 
-    let dev = ExclusiveDevice::new(spi, cs, Delay).unwrap();
-
-    let mut sd = SdSpi::<_, _, aligned::A1>::new(dev, embassy_time::Delay);
-    loop {
-        if sd.init().await.is_ok() { break; }
-        defmt::info!("retrying card init...");
-        Timer::after_millis(10).await;
-    }
-
-    let inner = BufStream::<_, 512>::new(sd);
-    let fs = FileSystem::new(inner, FsOptions::new()).await.unwrap();
-
-    {
-        let root = fs.root_dir();
-        let mut file = root.create_file("test.txt").await.unwrap();
-        file.write_all(b"hello\n").await.unwrap();
-        file.flush().await.unwrap();
-    }
-
-    fs.unmount().await.unwrap();
-
+    // Wait for the defmt probe to attach so we see every line
     Timer::after_millis(2000).await;
 
-    
+    // Wrap bus + CS into an SpiDevice for sdspi
+    let dev = ExclusiveDevice::new(spi, cs, Delay).unwrap();
+    let mut sd = SdSpi::<_, _, aligned::A1>::new(dev, embassy_time::Delay);
+
+    loop {
+        if sd.init().await.is_ok() { break; }
+        warn!("card init retry...");
+        Timer::after_millis(100).await;
+    }
+    warn!("card initialized");
+
+    // Mount FAT and write a test file
+    let inner = BufStream::<_, 512>::new(sd);
+    let fs = FileSystem::new(inner, FsOptions::new()).await.unwrap();
+    {
+        let root = fs.root_dir();
+        let mut file = root.create_file("test.py").await.unwrap();
+        file.write_all(b"print(\"hmwhahahah n\")\n").await.unwrap();
+        file.flush().await.unwrap();
+    }
+    fs.unmount().await.unwrap();
+    warn!("file written and unmounted");
+
+    loop {
+        Timer::after_millis(1000).await;
+    }
 }
 
 fn enable_interrupts() {
