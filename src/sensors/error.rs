@@ -10,6 +10,14 @@ pub enum ImuError {
     Initialization,
     #[error("Accelerometer Read Error")]
     AccelRead,
+    #[error("Accelerometer Config Error")]
+    AccelConfig,
     #[error("Gyroscope Read Error")]
     GyroRead,
+    #[error("Gyroscope Config Error")]
+    GyroConfig,
+    #[error("Soft Reset Error")]
+    SoftReset,
+    #[error("I2C Error")]
+    I2C,
 }

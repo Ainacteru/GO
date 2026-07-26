@@ -10,6 +10,7 @@ use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
 use embassy_time::{Delay, Timer};
 use go::{ Pins, communcation::{time_driver, usb::Usb}, peripherals, sensors::imu::Imu };
+use uom::si::thermodynamic_temperature::degree_fahrenheit;
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -47,9 +48,21 @@ async fn main(spawner: Spawner) {
     let i2c = peripherals::i2c::I2c::new(&mut clocks, 400.kHz(), peripherals.sercom3, &mut peripherals.pm, pins.sda, pins.scl, Irqs, channel0);
 
     Timer::after_secs(2).await;
-    info!("starting imu");
 
-    let _imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
+    let mut imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
+
+    loop {
+        let accel = imu.get_accel_data().await.unwrap();
+        info!("Accel xyz: {}, {}, {}", accel.x, accel.y, accel.z);
+
+        let gyro = imu.get_gyro_data().await.unwrap();
+        info!("Gyro  xyz: {}, {}, {}", gyro.x, gyro.y, gyro.z);
+
+        let temp = imu.get_temp_data().await.unwrap().get::<degree_fahrenheit>();
+        info!("Temp:      {}F", temp);
+
+        Timer::after_millis(250).await;
+    }
 
 }
 
