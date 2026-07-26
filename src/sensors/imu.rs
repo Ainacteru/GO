@@ -1,12 +1,17 @@
 
+use core::{f32, todo};
+
 use atsamd_hal::{ehal::i2c::SevenBitAddress, ehal_async::{delay::DelayNs, i2c::I2c}};
 use defmt::{debug, error};
+use embassy_time::Instant;
 use micromath::vector::F32x3;
+use micromath::F32Ext;
 use uom::si::{f32::ThermodynamicTemperature, thermodynamic_temperature::degree_celsius};
 
 use crate::sensors::error::ImuError::{self};
 
 const ADDRESS: u8 = 0x68;
+const TAU: f32 = 0.5;
 
 pub struct Imu<B, D> 
     where 
@@ -15,8 +20,12 @@ pub struct Imu<B, D>
 {
     i2c: B,
     delay: D,
+    prev_time: Instant,
+    prev_gyro: F32x3,
+    prev_angle: F32x3
 }
 
+// driver impl block
 impl<B, D> Imu<B, D>
     where 
         B: I2c<SevenBitAddress>,
@@ -27,6 +36,9 @@ impl<B, D> Imu<B, D>
         let mut imu = Self {
             i2c,
             delay,
+            prev_time: Instant::now(),
+            prev_gyro: F32x3 { x: 0.0, y: 0.0, z: 0.0 },
+            prev_angle: F32x3 { x: 0.0, y: 0.0, z: 0.0 },
         };
 
         let addr_buf = imu.read( 0x00).await.map_err(|_| ImuError::I2C)?;
@@ -75,21 +87,22 @@ impl<B, D> Imu<B, D>
 
         self.write(0x20, accel_config).await.map_err(|_| ImuError::AccelConfig)?; // accel
 
-        let gyro_range = 0x0040; //2kdps
+        let gyro_range = 0x0040; //2000 d/s
         let gyro_config: u16 = mode | averaging | filter_odr | gyro_range | odr; 
 
         self.write(0x21, gyro_config).await.map_err(|_| ImuError::GyroConfig)?; // gyro   
 
+        self.delay.delay_ms(50).await;
         Ok(())
     }
-
-    async fn soft_reset(&mut self) -> Result<(), ImuError> {
+    pub async fn soft_reset(&mut self) -> Result<(), ImuError> {
         self.write(0x7E, 0xDEAF).await.map_err(|_| ImuError::SoftReset)?;
 
         self.delay.delay_ms(5).await;
         Ok(())
     }
 
+    /// returns a vector 3d of the accel data in Gs
     pub async fn get_accel_data(&mut self) -> Result<F32x3, ImuError> {
         let mut buf = [0u8; 8];
 
@@ -102,16 +115,17 @@ impl<B, D> Imu<B, D>
         const SCALE: f32 = 8.0 / 32768.0;
 
         Ok(F32x3 {
-            x: x as f32 * SCALE,
-            y: y as f32 * SCALE,
+            x: -(x as f32 * SCALE),
+            y: -(y as f32 * SCALE),
             z: z as f32 * SCALE,
         })
     }
     
+    /// returns a vector 3d of the gyro data in degrees per second
     pub async fn get_gyro_data(&mut self) -> Result<F32x3, ImuError> {
         let mut buf = [0u8; 8];
 
-        // not using helper method here because i'm reading 3 registers at a time instead of 1
+        // not using the helper method here because i'm reading 3 registers at a time instead of 1
         self.i2c.write_read(ADDRESS, &[0x06], &mut buf).await.map_err(|_| ImuError::GyroRead)?;
 
 
@@ -132,8 +146,8 @@ impl<B, D> Imu<B, D>
 
         let temp = i16::from_le_bytes(self.read(0x09).await?);
         let temp  = temp as f32 / 512.0 + 23.0; 
-        Ok(ThermodynamicTemperature::new::<degree_celsius>(temp))
 
+        Ok(ThermodynamicTemperature::new::<degree_celsius>(temp))
     }
 
     /// `addr` is the address of the register
@@ -158,5 +172,38 @@ impl<B, D> Imu<B, D>
         let buf: [u8; 2] = buf[2..=3].try_into().unwrap();
 
         Ok(buf)
+    }
+}
+
+impl<B, D> Imu<B, D>
+    where 
+        B: I2c<SevenBitAddress>,
+        D: DelayNs,
+{
+    pub async fn get_pitch_yaw_roll(&mut self) -> Result<F32x3, ImuError> {
+       
+
+        let accel = self.get_accel_data().await?;
+        
+        let a_pitch = (-accel.x).atan2((accel.y * accel.y + accel.z * accel.z).sqrt()) * 180.0 / f32::consts::PI;
+        let a_roll = accel.y.atan2(accel.z) * 180.0 / f32::consts::PI;
+
+        let gyro = self.get_gyro_data().await?;
+
+        let now = Instant::now();
+        let dt = now.duration_since(self.prev_time).as_micros() as f32 / 1000000.0;
+        let dt = dt.min(0.05);
+        self.prev_time = now;
+
+        let alpha = TAU / (TAU + dt);
+
+        let x = alpha * (self.prev_angle.x + gyro.x * dt) + (1.0 - alpha) * a_pitch;
+        let y = alpha * (self.prev_angle.y + gyro.y * dt) + (1.0 - alpha) * a_roll;
+        let z = self.prev_angle.z + -(gyro.z * dt);
+
+        self.prev_angle = F32x3 {x, y, z};
+        
+
+        Ok(self.prev_angle)
     }
 }

@@ -61,7 +61,11 @@ async fn main(spawner: Spawner) {
         let temp = imu.get_temp_data().await.unwrap().get::<degree_fahrenheit>();
         info!("Temp:      {}F", temp);
 
-        Timer::after_millis(250).await;
+        let angle = imu.get_pitch_yaw_roll().await.unwrap();
+        info!("p: {=i32}, r: {=i32}, y: {=i32}", angle.x as i32, angle.y as i32, angle.z as i32);
+
+
+        Timer::after_millis(10).await;
     }
 
 }
