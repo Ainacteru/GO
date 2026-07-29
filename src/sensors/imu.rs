@@ -21,7 +21,6 @@ pub struct Imu<B, D>
     i2c: B,
     delay: D,
     prev_time: Instant,
-    prev_gyro: F32x3,
     prev_angle: F32x3
 }
 
@@ -37,7 +36,6 @@ impl<B, D> Imu<B, D>
             i2c,
             delay,
             prev_time: Instant::now(),
-            prev_gyro: F32x3 { x: 0.0, y: 0.0, z: 0.0 },
             prev_angle: F32x3 { x: 0.0, y: 0.0, z: 0.0 },
         };
 
@@ -203,7 +201,6 @@ impl<B, D> Imu<B, D>
 
         self.prev_angle = F32x3 {x, y, z};
         
-
         Ok(self.prev_angle)
     }
 }

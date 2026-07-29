@@ -28,7 +28,7 @@ bmp390-rs = { version = "0.4.0", features = ["uom"] }
 uom = { version = "0.37.0", features = ["f32", "si"], default-features = false }
 
 critical-section = "1.2.0"
-micromath = { version = "2.1.0", features = ["vector"] }
+micromath = { version = "2.1.0", features = ["quaternion", "vector"] }
 embassy-embedded-hal = "0.6.0"
 embassy-sync = "0.8.0"
 static_cell = { version = "2.1.0" }

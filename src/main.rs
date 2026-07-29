@@ -2,6 +2,8 @@
 #![no_main]
 
 
+use core::f32;
+
 use atsamd_hal::{
     clock::GenericClockController, dmac::{DmaController, PriorityLevel}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::_atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin, sercom::Sercom4,
 };
@@ -9,8 +11,9 @@ use defmt::{info};
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
 use embassy_time::{Delay, Timer};
-use go::{ Pins, communcation::{time_driver, usb::Usb}, peripherals, sensors::imu::Imu };
-use uom::si::thermodynamic_temperature::degree_fahrenheit;
+use go::{ Pins, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::imu::Imu };
+use libm::{asin, atan2f};
+use micromath::F32Ext;
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -51,18 +54,36 @@ async fn main(spawner: Spawner) {
 
     let mut imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
 
+    let mut kf = KalmanFilter::new(imu);
+
     loop {
-        let accel = imu.get_accel_data().await.unwrap();
-        info!("Accel xyz: {}, {}, {}", accel.x, accel.y, accel.z);
 
-        let gyro = imu.get_gyro_data().await.unwrap();
-        info!("Gyro  xyz: {}, {}, {}", gyro.x, gyro.y, gyro.z);
+        // let angle = imu.get_pitch_yaw_roll().await.unwrap();
+        // info!("pitch {}", angle.x);
+        // info!("roll {}", angle.y);
+        // info!("yaw {}", angle.z);
 
-        let temp = imu.get_temp_data().await.unwrap().get::<degree_fahrenheit>();
-        info!("Temp:      {}F", temp);
+        let angle = kf.state_estimation;
+        kf.predict().await.unwrap();
 
-        let angle = imu.get_pitch_yaw_roll().await.unwrap();
-        info!("p: {=i32}, r: {=i32}, y: {=i32}", angle.x as i32, angle.y as i32, angle.z as i32);
+        let x = angle.x();
+        let y = angle.y();
+        let z = angle.z();
+        let w = angle.w();
+
+        let roll = atan2f(2.0 *(w*x+y*z), 1.0 - 2.0 * (x*x + y*y)) * 180.0 / f32::consts::PI;
+        let pitch = (2.0 * (w * y - z * x)).asin() * 180.0 / f32::consts::PI;
+        let yaw = atan2f(2.0 *(w*z+x*y), 1.0 - 2.0 * (y*y + z*z)) * 180.0 / f32::consts::PI;
+
+
+        // info!("w {}", angle.w());
+        // info!("x {}", angle.x());
+        // info!("y {}", angle.y());
+        // info!("z {}", angle.z());
+
+        info!("pitch {}", pitch);
+        info!("roll {}", &roll);
+        info!("yaw {} \n", &yaw);
 
 
         Timer::after_millis(10).await;
