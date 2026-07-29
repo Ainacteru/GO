@@ -7,6 +7,7 @@ pub mod indicators;
 pub mod sensors;
 pub mod peripherals;
 pub mod storage;
+pub mod control;
 
 #[cfg(feature = "rt")]
 pub use cortex_m_rt::entry;

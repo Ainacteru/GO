@@ -156,16 +156,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bmi323-rs"
-version = "0.1.1"
-dependencies = [
- "defmt 0.3.100",
- "embedded-hal-async",
- "micromath",
- "packbits",
-]
-
-[[package]]
 name = "bmp390-rs"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -722,7 +712,6 @@ dependencies = [
  "aligned",
  "atsamd-hal",
  "block-device-adapters",
- "bmi323-rs",
  "bmp390-rs",
  "cortex-m",
  "cortex-m-rt",
@@ -951,17 +940,6 @@ name = "opaque-debug"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
-
-[[package]]
-name = "packbits"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99f89f805dede422d76bb52be23e3d0dbdf778edfff2413e820de828edd5ffc7"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.118",
-]
 
 [[package]]
 name = "paste"
