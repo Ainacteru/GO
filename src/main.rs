@@ -52,39 +52,18 @@ async fn main(spawner: Spawner) {
 
     Timer::after_secs(2).await;
 
-    let mut imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
+    let imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
 
     let mut kf = KalmanFilter::new(imu);
 
     loop {
 
-        // let angle = imu.get_pitch_yaw_roll().await.unwrap();
-        // info!("pitch {}", angle.x);
-        // info!("roll {}", angle.y);
-        // info!("yaw {}", angle.z);
+        kf.filter().await.unwrap();
 
-        let angle = kf.state();
-        kf.predict().await.unwrap();
-
-        let x = angle.x();
-        let y = angle.y();
-        let z = angle.z();
-        let w = angle.w();
-
-        let roll = atan2f(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)) * 180.0 / f32::consts::PI;
-        let pitch = (2.0 * (w * y - z * x)).asin() * 180.0 / f32::consts::PI;
-        let yaw = atan2f(2.0 * (w * z+x * y), 1.0 - 2.0 * (y * y + z * z)) * 180.0 / f32::consts::PI;
-
-
-        // info!("w {}", angle.w());
-        // info!("x {}", angle.x());
-        // info!("y {}", angle.y());
-        // info!("z {}", angle.z());
-
-        info!("pitch {}", pitch);
-        info!("roll {}", &roll);
-        info!("yaw {} \n", &yaw);
-
+        let (roll, pitch, yaw) = kf.state().to_euler();
+        info!("r: {}", roll * 57.2958);
+        info!("p: {}", pitch * 57.2958);
+        info!("y: {}", yaw * 57.2958);
 
         Timer::after_millis(10).await;
     }

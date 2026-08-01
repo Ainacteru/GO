@@ -1,5 +1,5 @@
 
-use core::{f32, todo};
+use core::{f32};
 
 use atsamd_hal::{ehal::i2c::SevenBitAddress, ehal_async::{delay::DelayNs, i2c::I2c}};
 use defmt::{debug, error};
@@ -15,6 +15,9 @@ const TAU: f32 = 0.5;
 
 pub const GYRO_NOISE: f32 = 0.007;
 pub const GYRO_BANDWIDTH: f32 = 98.0;
+
+pub const ACCEL_NOISE: f32 = 180.0;
+pub const ACCEL_BANDWIDTH: f32 = 98.8;
 
 pub struct Imu<B, D> 
     where 
