@@ -13,6 +13,9 @@ use crate::sensors::error::ImuError::{self};
 const ADDRESS: u8 = 0x68;
 const TAU: f32 = 0.5;
 
+pub const GYRO_NOISE: f32 = 0.007;
+pub const GYRO_BANDWIDTH: f32 = 98.0;
+
 pub struct Imu<B, D> 
     where 
         B: I2c<SevenBitAddress>,

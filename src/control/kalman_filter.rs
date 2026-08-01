@@ -3,7 +3,7 @@ use core::f32;
 use atsamd_hal::{ehal::i2c::SevenBitAddress, ehal_async::{delay::DelayNs, i2c::I2c}};
 use embassy_time::Instant;
 
-use crate::{control::error::KalmanFilterError, sensors::imu::Imu, util::math::matrix::{Matrix, Matrix3x3}};
+use crate::{control::error::KalmanFilterError, sensors::imu::{self, Imu}, util::math::matrix::{Matrix, Matrix3x3}};
 use micromath::{F32Ext, Quaternion, vector::F32x2};
 
 pub struct KalmanFilter <B: I2c<SevenBitAddress>, D: DelayNs> {
@@ -41,7 +41,32 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         self.state_estimation = self.state_estimation.normalize();
 
         // error covariance matrix update
+        
+
+        let mut skew = Matrix3x3::from_array([
+            [0.0, -gyro.z, gyro.y],
+            [gyro.z, 0.0, -gyro.x],
+            [-gyro.y, gyro.x, 0.0],
+        ]);
+
+        // F = I - skew * dt
+        skew.scale(dt);
+        let mut f = Matrix3x3::IDENTITY - skew;
+        let f_transpose = f.transpose();
+        // transpose F
+        // Q
+        // sec/hz to rads/sec
+        let sigma = imu::GYRO_NOISE * imu::GYRO_BANDWIDTH.sqrt() * f32::consts::PI / 180.0;
+        let q_value = sigma * sigma * dt * dt;
+
+        let q_noise = Matrix3x3::from_array([
+            [q_value, 0.0, 0.0],
+            [0.0, q_value, 0.0],
+            [0.0, 0.0, q_value],
+        ]);
+
         // P = FPF^T + Q
+        self.error_covariance = f * self.error_covariance * f_transpose + q_noise;
 
         Ok(())
     }
