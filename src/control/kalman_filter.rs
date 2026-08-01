@@ -3,13 +3,14 @@ use core::f32;
 use atsamd_hal::{ehal::i2c::SevenBitAddress, ehal_async::{delay::DelayNs, i2c::I2c}};
 use embassy_time::Instant;
 
-use crate::{control::error::KalmanFilterError, sensors::imu::Imu};
+use crate::{control::error::KalmanFilterError, sensors::imu::Imu, util::math::matrix::{Matrix, Matrix3x3}};
 use micromath::{F32Ext, Quaternion, vector::F32x2};
 
 pub struct KalmanFilter <B: I2c<SevenBitAddress>, D: DelayNs> {
     imu: Imu<B, D>,
-    pub state_estimation: Quaternion,
     prev_time: Instant,
+    state_estimation: Quaternion,
+    error_covariance: Matrix3x3,
 }
 
 impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
@@ -17,8 +18,9 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
     pub fn new(imu: Imu<B, D>) -> Self {
         Self {
             imu,
-            state_estimation: Quaternion::IDENTITY,
             prev_time: Instant::now(),
+            state_estimation: Quaternion::IDENTITY,
+            error_covariance: Matrix3x3::new_diagonal([0.01, 0.01, 0.01])
         }
     }
 
@@ -38,7 +40,13 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         self.state_estimation += q_dot * dt;
         self.state_estimation = self.state_estimation.normalize();
 
+        // error covariance matrix update
+        // P = FPF^T + Q
+
         Ok(())
     }
 
+    pub fn state(&self) -> Quaternion {
+        self.state_estimation
+    }
 }

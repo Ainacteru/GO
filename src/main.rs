@@ -63,7 +63,7 @@ async fn main(spawner: Spawner) {
         // info!("roll {}", angle.y);
         // info!("yaw {}", angle.z);
 
-        let angle = kf.state_estimation;
+        let angle = kf.state();
         kf.predict().await.unwrap();
 
         let x = angle.x();
@@ -71,9 +71,9 @@ async fn main(spawner: Spawner) {
         let z = angle.z();
         let w = angle.w();
 
-        let roll = atan2f(2.0 *(w*x+y*z), 1.0 - 2.0 * (x*x + y*y)) * 180.0 / f32::consts::PI;
+        let roll = atan2f(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)) * 180.0 / f32::consts::PI;
         let pitch = (2.0 * (w * y - z * x)).asin() * 180.0 / f32::consts::PI;
-        let yaw = atan2f(2.0 *(w*z+x*y), 1.0 - 2.0 * (y*y + z*z)) * 180.0 / f32::consts::PI;
+        let yaw = atan2f(2.0 * (w * z+x * y), 1.0 - 2.0 * (y * y + z * z)) * 180.0 / f32::consts::PI;
 
 
         // info!("w {}", angle.w());
