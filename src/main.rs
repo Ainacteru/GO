@@ -13,7 +13,7 @@ use embassy_executor::Spawner;
 use embassy_time::{Delay, Timer};
 use go::{ Pins, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::imu::Imu };
 use libm::{asin, atan2f};
-use micromath::F32Ext;
+use micromath::{F32Ext, vector::F32x3};
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -52,39 +52,26 @@ async fn main(spawner: Spawner) {
 
     Timer::after_secs(2).await;
 
-    let mut imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
+    let imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
 
     let mut kf = KalmanFilter::new(imu);
 
     loop {
 
-        // let angle = imu.get_pitch_yaw_roll().await.unwrap();
-        // info!("pitch {}", angle.x);
-        // info!("roll {}", angle.y);
-        // info!("yaw {}", angle.z);
+        kf.filter().await.unwrap();
 
-        let angle = kf.state_estimation;
-        kf.predict().await.unwrap();
+        let q = kf.state();
+        info!("q: {} {} {} {}", q.w(), q.x(), q.y(), q.z());
 
-        let x = angle.x();
-        let y = angle.y();
-        let z = angle.z();
-        let w = angle.w();
+        // let (roll, pitch, yaw) = kf.state().to_euler();
+        // info!("r: {}", roll * 57.2958);
+        // info!("p: {}", pitch * 57.2958);
+        // info!("y: {}", yaw * 57.2958);
 
-        let roll = atan2f(2.0 *(w*x+y*z), 1.0 - 2.0 * (x*x + y*y)) * 180.0 / f32::consts::PI;
-        let pitch = (2.0 * (w * y - z * x)).asin() * 180.0 / f32::consts::PI;
-        let yaw = atan2f(2.0 *(w*z+x*y), 1.0 - 2.0 * (y*y + z*z)) * 180.0 / f32::consts::PI;
+        let up = kf.state().conj().rotate(F32x3 { x: 0.0, y: 0.0, z: 1.0 });
+        let tilt_deg = libm::acosf(up.z.clamp(-1.0, 1.0)) * 180.0 / core::f32::consts::PI;
 
-
-        // info!("w {}", angle.w());
-        // info!("x {}", angle.x());
-        // info!("y {}", angle.y());
-        // info!("z {}", angle.z());
-
-        info!("pitch {}", pitch);
-        info!("roll {}", &roll);
-        info!("yaw {} \n", &yaw);
-
+        info!("tilt: {}", &tilt_deg);
 
         Timer::after_millis(10).await;
     }
