@@ -61,7 +61,7 @@ async fn main(spawner: Spawner) {
         kf.filter().await.unwrap();
 
         let q = kf.state();
-        info!("q: {} {} {} {}", q.w(), q.x(), q.y(), q.z());
+        info!("q: {} {} {} {}\n", q.w(), q.x(), q.y(), q.z());
 
         // let (roll, pitch, yaw) = kf.state().to_euler();
         // info!("r: {}", roll * 57.2958);
@@ -70,6 +70,11 @@ async fn main(spawner: Spawner) {
 
         let up = kf.state().conj().rotate(F32x3 { x: 0.0, y: 0.0, z: 1.0 });
         let tilt_deg = libm::acosf(up.z.clamp(-1.0, 1.0)) * 180.0 / core::f32::consts::PI;
+
+        kf.accel().await;
+        info!("up.x: {}", up.x);
+        info!("up.y: {}", up.y);
+        info!("up.z: {}\n", up.z);
 
         info!("tilt: {}", &tilt_deg);
 

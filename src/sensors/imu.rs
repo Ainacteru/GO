@@ -27,7 +27,8 @@ pub struct Imu<B, D>
     i2c: B,
     delay: D,
     prev_time: Instant,
-    prev_angle: F32x3
+    prev_angle: F32x3,
+    gyro_bias: F32x3,
 }
 
 // driver impl block
@@ -43,6 +44,7 @@ impl<B, D> Imu<B, D>
             delay,
             prev_time: Instant::now(),
             prev_angle: F32x3 { x: 0.0, y: 0.0, z: 0.0 },
+            gyro_bias: F32x3 { x: 0.0, y: 0.0, z: 0.0 },
         };
 
         let addr_buf = imu.read( 0x00).await.map_err(|_| ImuError::I2C)?;
@@ -74,6 +76,15 @@ impl<B, D> Imu<B, D>
         }
 
         imu.config_performance().await?;
+
+        let mut sum = F32x3 { x: 0.0, y: 0.0, z: 0.0 };
+        const N: usize = 200;                    // ~3 s at 66 Hz
+        for _ in 0..N {
+            let g = imu.get_gyro_data().await?;
+            sum.x += g.x; sum.y += g.y; sum.z += g.z;
+            imu.delay.delay_ms(15).await;
+        }
+        imu.gyro_bias = F32x3 { x: sum.x/N as f32, y: sum.y/N as f32, z: sum.z/N as f32 };
 
         Ok(imu)
         
@@ -112,16 +123,16 @@ impl<B, D> Imu<B, D>
 
         self.i2c.write_read(ADDRESS, &[0x03], &mut buf).await.map_err(|_| ImuError::AccelRead)?;
 
-        let x = i16::from_le_bytes([buf[2], buf[3]]);
-        let y = i16::from_le_bytes([buf[4], buf[5]]);
-        let z = i16::from_le_bytes([buf[6], buf[7]]);
+        let rx = i16::from_le_bytes([buf[2], buf[3]]);
+        let ry = i16::from_le_bytes([buf[4], buf[5]]);
+        let rz = i16::from_le_bytes([buf[6], buf[7]]);
 
         const SCALE: f32 = 8.0 / 32768.0;
 
         Ok(F32x3 {
-            x: -(x as f32 * SCALE),
-            y: -(y as f32 * SCALE),
-            z: z as f32 * SCALE,
+            x: rz as f32 * SCALE,
+            y: -(ry as f32 * SCALE),
+            z: -(rx as f32 * SCALE),
         })
     }
     
@@ -133,17 +144,17 @@ impl<B, D> Imu<B, D>
         self.i2c.write_read(ADDRESS, &[0x06], &mut buf).await.map_err(|_| ImuError::GyroRead)?;
 
 
-        let x = i16::from_le_bytes([buf[2], buf[3]]);
-        let y = i16::from_le_bytes([buf[4], buf[5]]);
-        let z = i16::from_le_bytes([buf[6], buf[7]]);
+        let rx = i16::from_le_bytes([buf[2], buf[3]]);
+        let ry = i16::from_le_bytes([buf[4], buf[5]]);
+        let rz = i16::from_le_bytes([buf[6], buf[7]]);
 
         const SCALE: f32 = 2000.0 / 32768.0;
 
         Ok(F32x3 {
-            x: x as f32 * SCALE,
-            y: y as f32 * SCALE,
-            z: z as f32 * SCALE,
-        })
+            x: rz as f32 * SCALE,
+            y: -(ry as f32 * SCALE),
+            z: -(rx as f32 * SCALE),
+        } - self.gyro_bias )
     }
 
     pub async fn get_temp_data(&mut self) -> Result<ThermodynamicTemperature, ImuError> {

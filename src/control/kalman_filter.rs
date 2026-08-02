@@ -1,6 +1,7 @@
 use core::f32;
 
 use atsamd_hal::{ehal::i2c::SevenBitAddress, ehal_async::{delay::DelayNs, i2c::I2c}};
+use defmt::info;
 use embassy_time::Instant;
 
 use crate::{control::error::KalmanFilterError, sensors::imu::{self, Imu}, util::math::matrix::{Matrix, Matrix3x3}};
@@ -91,6 +92,15 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         // R(q)
         let prediction = self.state_estimation.conj().rotate(gravity);
 
+          let dot = accel.x*prediction.x + accel.y*prediction.y + accel.z*prediction.z;
+  
+        if dot < 0.0 {
+            let fix = Quaternion::from_two_vectors(prediction, accel);
+            self.state_estimation = Self::normalize_exact(fix * self.state_estimation);
+            self.error_covariance = Matrix3x3::new_diagonal([0.01, 0.01, 0.01]);
+            return Ok(());
+        }
+
         let innovation = accel - prediction;
 
         let h = Matrix3x3::from_array( [
@@ -99,17 +109,26 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
             [-prediction.y, prediction.x, 0.0],
         ] );
 
-        let accel_dens = imu::ACCEL_NOISE *1e-6;
-        let rms= accel_dens * imu::ACCEL_BANDWIDTH.sqrt();
+        // let accel_dens = imu::ACCEL_NOISE *1e-6;
+        // let rms= accel_dens * imu::ACCEL_BANDWIDTH.sqrt();
 
-        let accel_noise = Matrix3x3::new_diagonal(
-            [rms * rms, rms * rms, rms * rms],
-        );
+        // let accel_noise = Matrix3x3::new_diagonal(
+        //     [rms * rms, rms * rms, rms * rms],
+        // );
+
+        let ACCEL_VAR: f32 = 0.01;
+        let accel_noise = Matrix3x3::new_diagonal([ACCEL_VAR, ACCEL_VAR, ACCEL_VAR]);
 
         let s = h * self.error_covariance * h.transpose() + accel_noise;
         let kalman_gain = self.error_covariance * h.transpose() * s.inverse().map_err(KalmanFilterError::Matrix)?;
 
         let correction = kalman_gain.multiply_vector(innovation);
+
+        let n = libm::sqrtf(correction.x*correction.x + correction.y*correction.y + correction.z*correction.z);
+        let max_corr = 0.1_f32;
+        let correction = if n > max_corr {
+            F32x3 { x: correction.x*max_corr/n, y: correction.y*max_corr/n, z: correction.z*max_corr/n }
+        } else { correction };
 
         let dq = Self::normalize_exact(Quaternion::new(1.0, correction.x/2.0, correction.y/2.0, correction.z/2.0));
 
@@ -139,5 +158,12 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         let n = libm::sqrtf(q.norm());
         if n == 0.0 { return Quaternion::IDENTITY; }
         q.scale(1.0 / n)
+    }
+
+    pub async fn accel(&mut self) {
+        let accel = self.imu.get_accel_data().await.map_err(KalmanFilterError::ImuErr).unwrap();
+
+        info!("accel xyz: {} {} {}", accel.x, accel.y, accel.z);
+
     }
 }
