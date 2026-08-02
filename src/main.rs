@@ -13,7 +13,7 @@ use embassy_executor::Spawner;
 use embassy_time::{Delay, Timer};
 use go::{ Pins, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::imu::Imu };
 use libm::{asin, atan2f};
-use micromath::F32Ext;
+use micromath::{F32Ext, vector::F32x3};
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -60,10 +60,18 @@ async fn main(spawner: Spawner) {
 
         kf.filter().await.unwrap();
 
-        let (roll, pitch, yaw) = kf.state().to_euler();
-        info!("r: {}", roll * 57.2958);
-        info!("p: {}", pitch * 57.2958);
-        info!("y: {}", yaw * 57.2958);
+        let q = kf.state();
+        info!("q: {} {} {} {}", q.w(), q.x(), q.y(), q.z());
+
+        // let (roll, pitch, yaw) = kf.state().to_euler();
+        // info!("r: {}", roll * 57.2958);
+        // info!("p: {}", pitch * 57.2958);
+        // info!("y: {}", yaw * 57.2958);
+
+        let up = kf.state().conj().rotate(F32x3 { x: 0.0, y: 0.0, z: 1.0 });
+        let tilt_deg = libm::acosf(up.z.clamp(-1.0, 1.0)) * 180.0 / core::f32::consts::PI;
+
+        info!("tilt: {}", &tilt_deg);
 
         Timer::after_millis(10).await;
     }

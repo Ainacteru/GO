@@ -43,7 +43,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         let dt = dt.min(0.05);
         self.prev_time = now;
 
-        self.state_estimation = (self.state_estimation + q_dot * dt).normalize();
+        self.state_estimation = Self::normalize_exact(self.state_estimation + q_dot * dt);
 
         // error covariance matrix update
 
@@ -74,7 +74,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
     async fn correct(&mut self) -> Result<(), KalmanFilterError> {
         let accel = self.imu.get_accel_data().await.map_err(KalmanFilterError::ImuErr)?;
 
-        let mag = accel.magnitude();
+        let mag = libm::sqrtf(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z);
 
         if !(0.9..=1.1).contains(&mag) {
             return Ok(())
@@ -111,9 +111,9 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
         let correction = kalman_gain.multiply_vector(innovation);
 
-        let dq = Quaternion::new(1.0, correction.x/2.0, correction.y/2.0, correction.z/2.0).normalize();
+        let dq = Self::normalize_exact(Quaternion::new(1.0, correction.x/2.0, correction.y/2.0, correction.z/2.0));
 
-        self.state_estimation = (dq * self.state_estimation).normalize();
+        self.state_estimation = Self::normalize_exact(dq * self.state_estimation);
 
         let i_kh = Matrix3x3::IDENTITY - kalman_gain * h;
         self.error_covariance = i_kh * self.error_covariance * i_kh.transpose() + kalman_gain * accel_noise * kalman_gain.transpose();
@@ -132,5 +132,12 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
     pub fn state(&self) -> Quaternion {
         self.state_estimation
+    }
+
+    /// micromath's normalize function isn't very accurate, so using libm!!
+    fn normalize_exact(q: Quaternion) -> Quaternion {
+        let n = libm::sqrtf(q.norm());
+        if n == 0.0 { return Quaternion::IDENTITY; }
+        q.scale(1.0 / n)
     }
 }
