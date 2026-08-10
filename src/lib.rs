@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 pub mod panic;
 pub mod communcation;
@@ -9,6 +9,8 @@ pub mod peripherals;
 pub mod storage;
 pub mod control;
 pub mod util;
+
+pub mod tests;
 
 #[cfg(feature = "rt")]
 pub use cortex_m_rt::entry;

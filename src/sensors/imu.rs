@@ -28,7 +28,6 @@ pub struct Imu<B, D>
     delay: D,
     prev_time: Instant,
     prev_angle: F32x3,
-    gyro_bias: F32x3,
 }
 
 // driver impl block
@@ -44,7 +43,6 @@ impl<B, D> Imu<B, D>
             delay,
             prev_time: Instant::now(),
             prev_angle: F32x3 { x: 0.0, y: 0.0, z: 0.0 },
-            gyro_bias: F32x3 { x: 0.0, y: 0.0, z: 0.0 },
         };
 
         let addr_buf = imu.read( 0x00).await.map_err(|_| ImuError::I2C)?;
@@ -76,15 +74,6 @@ impl<B, D> Imu<B, D>
         }
 
         imu.config_performance().await?;
-
-        let mut sum = F32x3 { x: 0.0, y: 0.0, z: 0.0 };
-        const N: usize = 200;                    // ~3 s at 66 Hz
-        for _ in 0..N {
-            let g = imu.get_gyro_data().await?;
-            sum.x += g.x; sum.y += g.y; sum.z += g.z;
-            imu.delay.delay_ms(15).await;
-        }
-        imu.gyro_bias = F32x3 { x: sum.x/N as f32, y: sum.y/N as f32, z: sum.z/N as f32 };
 
         Ok(imu)
         
@@ -154,7 +143,7 @@ impl<B, D> Imu<B, D>
             x: rz as f32 * SCALE,
             y: -(ry as f32 * SCALE),
             z: -(rx as f32 * SCALE),
-        } - self.gyro_bias )
+        })
     }
 
     pub async fn get_temp_data(&mut self) -> Result<ThermodynamicTemperature, ImuError> {
