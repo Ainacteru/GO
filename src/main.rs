@@ -11,7 +11,7 @@ use defmt::{info};
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
 use embassy_time::{Delay, Timer};
-use go::{ Pins, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::imu::Imu };
+use go::{ Pins, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::{bmp::Bmp, imu::Imu} };
 use libm::{asin, atan2f};
 use micromath::{F32Ext, vector::F32x3};
 
@@ -53,12 +53,11 @@ async fn main(spawner: Spawner) {
     Timer::after_secs(2).await;
 
     let imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
+    let baro = Bmp::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
 
-    let mut kf = KalmanFilter::new(imu);
+    let mut kf = KalmanFilter::new(imu, baro);
 
     loop {
-
-
 
         kf.calc_atitude().await.unwrap();
 
