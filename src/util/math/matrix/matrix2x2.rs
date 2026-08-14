@@ -1,4 +1,4 @@
-use micromath::vector::{F32x2, F32x3};
+use micromath::vector::{F32x2};
 
 use crate::util::math::{error::MatrixError, matrix::Matrix};
 

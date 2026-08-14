@@ -37,7 +37,7 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
         let meters = 44_330.0 * (1.0 - libm::powf(p / 101_325.0, 0.19026));
         Length::new::<uom::si::length::meter>(meters)
     }
-    pub async fn altitude(&mut self) -> Length {
+    pub async fn change_in_altitude(&mut self) -> Length {
         let mes = self.inner().read_latest_measurement().await.unwrap().into_uom();
         let pres = mes.pressure_pascal();
         let elevation = self.elevation_from_pressure(pres);
@@ -47,5 +47,12 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
         }
 
         elevation - self.prev_alt
+    }
+    pub async fn altitude(&mut self) -> Length {
+        let mes = self.inner().read_latest_measurement().await.unwrap().into_uom();
+        let pres = mes.pressure_pascal();
+        
+
+        self.elevation_from_pressure(pres)
     }
 }
