@@ -27,7 +27,7 @@ pub struct Imu<B, D>
     i2c: B,
     delay: D,
     prev_time: Instant,
-    prev_angle: F32x3
+    prev_angle: F32x3,
 }
 
 // driver impl block
@@ -112,16 +112,16 @@ impl<B, D> Imu<B, D>
 
         self.i2c.write_read(ADDRESS, &[0x03], &mut buf).await.map_err(|_| ImuError::AccelRead)?;
 
-        let x = i16::from_le_bytes([buf[2], buf[3]]);
-        let y = i16::from_le_bytes([buf[4], buf[5]]);
-        let z = i16::from_le_bytes([buf[6], buf[7]]);
+        let rx = i16::from_le_bytes([buf[2], buf[3]]);
+        let ry = i16::from_le_bytes([buf[4], buf[5]]);
+        let rz = i16::from_le_bytes([buf[6], buf[7]]);
 
         const SCALE: f32 = 8.0 / 32768.0;
 
         Ok(F32x3 {
-            x: -(x as f32 * SCALE),
-            y: -(y as f32 * SCALE),
-            z: z as f32 * SCALE,
+            x: rz as f32 * SCALE,
+            y: -(ry as f32 * SCALE),
+            z: -(rx as f32 * SCALE),
         })
     }
     
@@ -133,16 +133,16 @@ impl<B, D> Imu<B, D>
         self.i2c.write_read(ADDRESS, &[0x06], &mut buf).await.map_err(|_| ImuError::GyroRead)?;
 
 
-        let x = i16::from_le_bytes([buf[2], buf[3]]);
-        let y = i16::from_le_bytes([buf[4], buf[5]]);
-        let z = i16::from_le_bytes([buf[6], buf[7]]);
+        let rx = i16::from_le_bytes([buf[2], buf[3]]);
+        let ry = i16::from_le_bytes([buf[4], buf[5]]);
+        let rz = i16::from_le_bytes([buf[6], buf[7]]);
 
         const SCALE: f32 = 2000.0 / 32768.0;
 
         Ok(F32x3 {
-            x: x as f32 * SCALE,
-            y: y as f32 * SCALE,
-            z: z as f32 * SCALE,
+            x: rz as f32 * SCALE,
+            y: -(ry as f32 * SCALE),
+            z: -(rx as f32 * SCALE),
         })
     }
 
