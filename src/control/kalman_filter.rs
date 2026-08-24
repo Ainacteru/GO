@@ -49,14 +49,12 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
 impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
-    pub async fn calc_atitude(&mut self) -> Result<(), KalmanFilterError> {
+    pub async fn calc_orientation(&mut self) -> Result<(), KalmanFilterError> {
 
         //need an imu low pass filter
         self.iir_filter().await?;
 
-        self.atitude_predict().await?;
-
-        self.atitude_correct().await?;
+        self.orientation_predict().await?;
 
         Ok(())
     }
@@ -109,7 +107,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         Ok(())
     }
 
-    async fn atitude_correct(&mut self) -> Result<(), KalmanFilterError> {
+    async fn orientation_correct(&mut self) -> Result<(), KalmanFilterError> {
         let accel = self.imu.get_accel_data().await.map_err(KalmanFilterError::ImuErr)?;
         let gyro = self.imu.get_gyro_data().await.map_err(KalmanFilterError::ImuErr)?;
 
@@ -252,6 +250,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
         Ok(())
     }
+}
 
     async fn altitude_correct(&mut self) -> Result<(), KalmanFilterError> {
         let baro = self.baro.altitude().await.get::<length::meter>();

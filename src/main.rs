@@ -14,6 +14,7 @@ use embassy_time::{Delay, Timer};
 use go::{ Pins, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::{bmp::Bmp, imu::Imu} };
 use libm::{asin, atan2f};
 use micromath::{F32Ext, vector::F32x3};
+use uom::si::length;
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -57,42 +58,51 @@ async fn main(spawner: Spawner) {
 
     let mut kf = KalmanFilter::new(imu, baro);
 
-    loop {
+    // loop {
+    //     kf.calc_orientation().await.unwrap();
+    //     kf.calc_altitude().await.unwrap();
+
+    //     let h = kf.altitude().get::<length::centimeter>();
+    //     // let baro = kf.baro_alt().await.get::<length::centimeter>();
+
+    //     info!("height: {} cm", h);
+    //     // info!("baro: {}", &baro);
+    // }
 
         kf.calc_atitude().await.unwrap();
 
-        let q = kf.atitude();
+    //     let q = kf.atitude();
 
-        // let (roll, pitch, yaw) = kf.state().to_euler();
-        // info!("r: {}", roll * 57.2958);
-        // info!("p: {}", pitch * 57.2958);
-        // info!("y: {}", yaw * 57.2958);
+    //     // let (roll, pitch, yaw) = kf.state().to_euler();
+    //     // info!("r: {}", roll * 57.2958);
+    //     // info!("p: {}", pitch * 57.2958);
+    //     // info!("y: {}", yaw * 57.2958);
 
-        let up = kf.atitude().conj().rotate(F32x3 { x: 0.0, y: 0.0, z: 1.0 });
-        // let tilt_deg = libm::acosf(up.z.clamp(-1.0, 1.0)) * 180.0 / core::f32::consts::PI;
+    //     let up = kf.atitude().conj().rotate(F32x3 { x: 0.0, y: 0.0, z: 1.0 });
+    //     // let tilt_deg = libm::acosf(up.z.clamp(-1.0, 1.0)) * 180.0 / core::f32::consts::PI;
 
 
-            // kf.imu_dat().await;
-            // info!("q: {} {} {} {}\n", q.w(), q.x(), q.y(), q.z());
+    //         // kf.imu_dat().await;
+    //         // info!("q: {} {} {} {}\n", q.w(), q.x(), q.y(), q.z());
 
-            info!("up.x: {}", up.x);
-            info!("up.y: {}", up.y);
-            info!("up.z: {}\n", up.z);
+    //         info!("up.x: {}", up.x);
+    //         info!("up.y: {}", up.y);
+    //         info!("up.z: {}\n", up.z);
 
-            const RAD: f32 = 180.0 / core::f32::consts::PI;
+    //         const RAD: f32 = 180.0 / core::f32::consts::PI;
             
-            let tilt   = libm::acosf(up.z.clamp(-1.0, 1.0)) * RAD;  // 0..180 off vertical
-            let lean_x = libm::asinf(up.x.clamp(-1.0, 1.0)) * RAD;  // -90..+90 toward PCB normal
-            let lean_y = libm::asinf(up.y.clamp(-1.0, 1.0)) * RAD;  // -90..+90 toward right
+    //         let tilt   = libm::acosf(up.z.clamp(-1.0, 1.0)) * RAD;  // 0..180 off vertical
+    //         let lean_x = libm::asinf(up.x.clamp(-1.0, 1.0)) * RAD;  // -90..+90 toward PCB normal
+    //         let lean_y = libm::asinf(up.y.clamp(-1.0, 1.0)) * RAD;  // -90..+90 toward right
 
-            info!("tilt: {}", &&tilt);
-            info!("lean_x: {}", &&lean_x);
-            info!("lean_y: {}\n", &&lean_y);
+    //         info!("tilt: {}", &&tilt);
+    //         info!("lean_x: {}", &&lean_x);
+    //         info!("lean_y: {}\n", &&lean_y);
 
             
 
-        Timer::after_millis(10).await;
-    }
+    //     Timer::after_millis(10).await;
+    // }
 
 }
 
