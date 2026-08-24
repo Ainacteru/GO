@@ -3,15 +3,14 @@ use core::f32;
 use atsamd_hal::{ehal::i2c::SevenBitAddress, ehal_async::{delay::DelayNs, i2c::I2c}};
 use defmt::info;
 use embassy_time::Instant;
-use uom::si::{acceleration, f32::{Acceleration, Length, Velocity}, length::{self}, velocity};
+use uom::si::length;
 
-use crate::{control::error::KalmanFilterError, sensors::{bmp::Bmp, imu::Imu}, util::math::matrix::{Matrix, matrix3x1::{Matrix1x3, Matrix3x1}, matrix3x3::Matrix3x3}};
-use micromath::{Quaternion, vector::F32x3};
+use crate::{control::error::KalmanFilterError, sensors::{bmp::Bmp, imu::Imu}, util::math::matrix::{Matrix, matrix2x1::{Matrix1x2, Matrix2x1}, matrix2x2::Matrix2x2, matrix3x3::Matrix3x3}};
+use micromath::{F32Ext, Quaternion, vector::{F32x3, Vector}};
 
 struct AltitudeEstimation {
-    height: Length,
-    vertical_velocity: Velocity,
-    accel_bias: Acceleration,
+    height: f32,
+    vertical_velocity: f32,
 }
 
 pub struct KalmanFilter <B: I2c<SevenBitAddress>, D: DelayNs> {
@@ -25,7 +24,7 @@ pub struct KalmanFilter <B: I2c<SevenBitAddress>, D: DelayNs> {
 
     alt_prev_time: Instant,
     alt_state_estimation: AltitudeEstimation,
-    alt_error_covariance: Matrix3x3,
+    alt_error_covariance: Matrix2x2,
 }
 
 impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
@@ -41,17 +40,13 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
             orien_error_covariance: Matrix3x3::new_diagonal([0.01, 0.01, 0.01]),
             orien_antiparallel_count: 0,
 
-            alt_state_estimation: AltitudeEstimation { 
-                height: Length::new::<length::meter>(0.0), 
-                vertical_velocity: Velocity::new::<velocity::meter_per_second>(0.0),
-                accel_bias: Acceleration::new::<acceleration::meter_per_second_squared>(0.0),
-            },
-            alt_error_covariance: Matrix3x3::new_diagonal([1.0, 1.0, 1.0]),
+            alt_state_estimation: AltitudeEstimation { height: 0.0, vertical_velocity: 0.0 },
+            alt_error_covariance: Matrix2x2::new(),
 
         }
     }
 }
-/// orientation
+
 impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
     pub async fn calc_orientation(&mut self) -> Result<(), KalmanFilterError> {
@@ -61,12 +56,10 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
         self.orientation_predict().await?;
 
-        self.orientation_correct().await?;
-
         Ok(())
     }
 
-    async fn orientation_predict(&mut self) -> Result<(), KalmanFilterError> {
+    async fn atitude_predict(&mut self) -> Result<(), KalmanFilterError> {
         const DEG2RAD: f32 = f32::consts::PI / 180.0;
         let gyro =  self.imu.get_gyro_data().await.map_err(KalmanFilterError::ImuErr)?;
 
@@ -224,12 +217,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
     async fn altitude_predict(&mut self) -> Result<(), KalmanFilterError> {
         let accel = self.imu.get_accel_data().await.map_err(KalmanFilterError::ImuErr)?;
         let a_world = self.orien_state_estimation.rotate(accel);
-        let measured_accel = (a_world.z - 1.0) * 9.80665;
-
-        // measured_accel = true_accel + bias
-        // soo
-        // true_accel = measured_accel - bias
-        // find bias and subtract
+        let vertical_accel = (a_world.z - 1.0) * 9.80665;
 
         let now = Instant::now();
         let dt = now.duration_since(self.alt_prev_time).as_micros() as f32 / 1000000.0;
@@ -237,28 +225,24 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         self.alt_prev_time = now;
 
         // F
-        let f = Matrix3x3::from_array([
-            [1.0, dt, -(dt * dt) * 0.5],
-            [0.0, 1.0, -dt],
-            [0.0, 0.0, 1.0],
+        let f = Matrix2x2::from_array([
+            [1.0, dt],
+            [0.0, 1.0],
         ]);
 
-        let b = Matrix3x1::from_array([0.5 * dt * dt, dt, 0.0]);
+        let b = Matrix2x1::from_array([0.5 * dt * dt, dt]);
 
-        let x = Matrix3x1::from_array([
-            self.alt_state_estimation.height.get::<length::meter>(),
-            self.alt_state_estimation.vertical_velocity.get::<velocity::meter_per_second>(),
-            self.alt_state_estimation.accel_bias.get::<acceleration::meter_per_second_squared>(),
+        let x = Matrix2x1::from_array([
+            self.alt_state_estimation.height,
+            self.alt_state_estimation.vertical_velocity,
         ]);
-        let x_new = f * x + b * measured_accel;
+        let x_new = f * x + b * vertical_accel;
 
-        self.alt_state_estimation.height = Length::new::<length::meter>(x_new.get(0));
-        self.alt_state_estimation.vertical_velocity = Velocity::new::<velocity::meter_per_second>(x_new.get(1));
-        self.alt_state_estimation.accel_bias = Acceleration::new::<acceleration::meter_per_second_squared>(x_new.get(2));
+        self.alt_state_estimation.height = x_new.get(0);
+        self.alt_state_estimation.vertical_velocity = x_new.get(1);
         
-        const ACCEL_VAR: f32 = 0.05;
-        const BIAS_VAR: f32 = 1e-4;
-        let q = (b * b.transpose()) * ACCEL_VAR + Matrix3x3::new_diagonal([0.0, 0.0, BIAS_VAR * dt]);
+        const ACCEL_VAR: f32 = 0.01;
+        let q = (b * b.transpose()) * ACCEL_VAR;
 
         // P = FPF^T + Q
         self.alt_error_covariance = f * self.alt_error_covariance * f.transpose() + q;
@@ -266,36 +250,35 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
         Ok(())
     }
+}
 
     async fn altitude_correct(&mut self) -> Result<(), KalmanFilterError> {
-        let baro_alt = self.baro.change_in_altitude().await.get::<length::meter>();
-
-        let height = self.alt_state_estimation.height.get::<length::meter>();
+        let baro = self.baro.altitude().await.get::<length::meter>();
 
 
-        let h = Matrix1x3::from_array([1.0, 0.0, 0.0]);
+        let h = Matrix1x2::from_array([1.0, 0.0]);
 
-        let y = baro_alt - height;
+        let y = baro - self.alt_state_estimation.height;
 
         const BARO_VAR: f32 = 0.25;
 
         let s = h * self.alt_error_covariance * h.transpose() + BARO_VAR;
+        if s == 0.0 || !s.is_finite() {
+            return Ok(());
+        }
 
         let k = (self.alt_error_covariance * h.transpose()) * (1.0 / s);
 
-        let x = Matrix3x1::from_array([
-            self.alt_state_estimation.height.get::<length::meter>(),
-            self.alt_state_estimation.vertical_velocity.get::<velocity::meter_per_second>(),
-            self.alt_state_estimation.accel_bias.get::<acceleration::meter_per_second_squared>(),
+        let x = Matrix2x1::from_array([
+            self.alt_state_estimation.height,
+            self.alt_state_estimation.vertical_velocity,
         ]);
-
         let x_new = x + k * y;
-        self.alt_state_estimation.height = Length::new::<length::meter>(x_new.get(0));
-        self.alt_state_estimation.vertical_velocity = Velocity::new::<velocity::meter_per_second>(x_new.get(1));
-        self.alt_state_estimation.accel_bias = Acceleration::new::<acceleration::meter_per_second_squared>(x_new.get(2));
+        self.alt_state_estimation.height = x_new.get(0);
+        self.alt_state_estimation.vertical_velocity = x_new.get(1);
 
-        // P = (I - K*H) P (I - K*H)^T + K*R*K^T
-        let i_kh = Matrix3x3::IDENTITY - k * h;
+        // Joseph form: P = (I - K*H) P (I - K*H)^T + K*R*K^T
+        let i_kh = Matrix2x2::IDENTITY - k * h;
         self.alt_error_covariance =
             i_kh * self.alt_error_covariance * i_kh.transpose()
             + (k * BARO_VAR) * k.transpose();
@@ -320,15 +303,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         self.orien_state_estimation
     }
 
-    pub fn altitude(&self) -> Length {
-        self.alt_state_estimation.height
-    }
-
-    pub async fn baro_alt(&mut self) -> Length {
-        self.baro.change_in_altitude().await
-    }
-
-    /// using libm instead of micromath's normalize 
+    /// micromath's normalize function isn't very accurate, so using libm!!
     fn normalize_exact(q: Quaternion) -> Quaternion {
         let n = libm::sqrtf(q.norm());
         if n == 0.0 { return Quaternion::IDENTITY; }

@@ -1,4 +1,4 @@
-pub mod matrix3x1;
+pub mod matrix2x1;
 pub mod matrix2x2;
 pub mod matrix3x3;
 

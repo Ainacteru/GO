@@ -57,4 +57,11 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
 
         self.elevation_from_pressure(pres)
     }
+    pub async fn altitude(&mut self) -> Length {
+        let mes = self.inner().read_latest_measurement().await.unwrap().into_uom();
+        let pres = mes.pressure_pascal();
+        
+
+        self.elevation_from_pressure(pres)
+    }
 }
