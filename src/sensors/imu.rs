@@ -120,7 +120,7 @@ impl<B, D> Imu<B, D>
 
         Ok(F32x3 {
             x: rz as f32 * SCALE,
-            y: -(ry as f32 * SCALE),
+            y: ry as f32 * SCALE,
             z: -(rx as f32 * SCALE),
         })
     }
@@ -141,7 +141,7 @@ impl<B, D> Imu<B, D>
 
         Ok(F32x3 {
             x: rz as f32 * SCALE,
-            y: -(ry as f32 * SCALE),
+            y: ry as f32 * SCALE,
             z: -(rx as f32 * SCALE),
         })
     }

@@ -54,17 +54,23 @@ async fn main(spawner: Spawner) {
     Timer::after_secs(2).await;
 
     let imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
-    let baro = Bmp::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
+    let mut baro = Bmp::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
 
-    let mut kf = KalmanFilter::new(imu, baro);
+    // let mut kf = KalmanFilter::new(imu, baro);
+
+    // loop {
+    //     kf.calc_orientation().await.unwrap();
+    //     kf.calc_altitude().await.unwrap();
+
+    //     let h = kf.altitude().get::<length::centimeter>();
+    //     // let baro = kf.baro_alt().await.get::<length::centimeter>();
+
+    //     info!("height: {} cm", h);
+    //     // info!("baro: {}", &baro);
+    // }
 
     loop {
-        kf.calc_orientation().await.unwrap();
-        kf.calc_altitude().await.unwrap();
-
-        let h = kf.altitude().get::<length::meter>();
-
-        info!("height: {} meters", h);
+        baro.change_in_altitude().await;
     }
 
     // loop {

@@ -2,14 +2,14 @@ use bmp390_rs::{
     Bmp390Result, ResetPolicy, SdoPinState, bus::I2c as BmpI2c, typestate::{Bmp390Builder, Bmp390Mode, NoPin, Normal, PressureAndTemperature}
 };
 use atsamd_hal::ehal_async::{delay::DelayNs, i2c::I2c};
-use defmt::info;
-use uom::si::{f32::{Length, Pressure}, pressure::pascal};
+use defmt::{debug, info};
+use uom::si::{f32::{Length, Pressure}, length, pressure::pascal};
 
 type Inner<B, D> = Bmp390Mode<Normal, PressureAndTemperature, BmpI2c<B>, NoPin, D, false>;
 
 pub struct Bmp<B: I2c, D: DelayNs> {
     inner: Inner<B, D>,
-    prev_alt: Length,
+    prev_alt: Option<Length>,
 }
 
 impl<B: I2c, D: DelayNs> Bmp<B, D> {
@@ -26,7 +26,7 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
 
         Ok(Self {
             inner,
-            prev_alt: Length::new::<uom::si::length::meter>(0.0),
+            prev_alt: Option::None,
         })
     }
     pub fn inner(&mut self) -> &mut Inner<B, D> {
@@ -42,11 +42,13 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
         let pres = mes.pressure_pascal();
         let elevation = self.elevation_from_pressure(pres);
 
-        if self.prev_alt.get::<uom::si::length::meter>() == 0.0 {
-            self.prev_alt = elevation;
+        if self.prev_alt.is_none() {
+            self.prev_alt = Some(elevation);
         }
 
-        elevation - self.prev_alt
+        debug!("baro: {} cm", elevation.get::<length::centimeter>() - self.prev_alt.unwrap().get::<length::centimeter>());
+
+        elevation - self.prev_alt.unwrap()
     }
     pub async fn altitude(&mut self) -> Length {
         let mes = self.inner().read_latest_measurement().await.unwrap().into_uom();

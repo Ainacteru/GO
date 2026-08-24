@@ -254,7 +254,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
         self.alt_state_estimation.height = Length::new::<length::meter>(x_new.get(0));
         self.alt_state_estimation.vertical_velocity = Velocity::new::<velocity::meter_per_second>(x_new.get(1));
-        self.alt_state_estimation.accel_bias.get::<acceleration::meter_per_second_squared>();
+        self.alt_state_estimation.accel_bias = Acceleration::new::<acceleration::meter_per_second_squared>(x_new.get(2));
         
         const ACCEL_VAR: f32 = 0.05;
         const BIAS_VAR: f32 = 1e-4;
@@ -292,7 +292,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         let x_new = x + k * y;
         self.alt_state_estimation.height = Length::new::<length::meter>(x_new.get(0));
         self.alt_state_estimation.vertical_velocity = Velocity::new::<velocity::meter_per_second>(x_new.get(1));
-        self.alt_state_estimation.accel_bias = Acceleration::new::<acceleration::meter_per_second_squared>(x_new.get(1));
+        self.alt_state_estimation.accel_bias = Acceleration::new::<acceleration::meter_per_second_squared>(x_new.get(2));
 
         // P = (I - K*H) P (I - K*H)^T + K*R*K^T
         let i_kh = Matrix3x3::IDENTITY - k * h;
@@ -324,7 +324,11 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         self.alt_state_estimation.height
     }
 
-    /// micromath's normalize function isn't very accurate, so using libm!!
+    pub async fn baro_alt(&mut self) -> Length {
+        self.baro.change_in_altitude().await
+    }
+
+    /// using libm instead of micromath's normalize 
     fn normalize_exact(q: Quaternion) -> Quaternion {
         let n = libm::sqrtf(q.norm());
         if n == 0.0 { return Quaternion::IDENTITY; }
