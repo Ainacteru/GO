@@ -7,14 +7,14 @@ use core::f32;
 use atsamd_hal::{
     clock::GenericClockController, dmac::{DmaController, PriorityLevel}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::_atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin, sercom::Sercom4,
 };
-use defmt::{info};
+use defmt::{info, println};
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
 use embassy_time::{Delay, Timer};
-use go::{ Pins, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::{bmp::Bmp, imu::Imu} };
+use go::{ Pins, communcation::{time_driver, usb::Usb}, peripherals, sensors::{bmp::Bmp, imu::Imu} };
 use libm::{asin, atan2f};
 use micromath::{F32Ext, vector::F32x3};
-use uom::si::length;
+use uom::si::{length, pressure, thermodynamic_temperature};
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -53,57 +53,19 @@ async fn main(spawner: Spawner) {
 
     Timer::after_secs(2).await;
 
-    let imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
-    let baro = Bmp::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
+    // let imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
+    let mut baro = Bmp::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
 
-    let mut kf = KalmanFilter::new(imu, baro);
+    loop {
+        // let (pres, temp) = baro.read_measurement().await.unwrap();
 
-    // loop {
-    //     kf.calc_orientation().await.unwrap();
-    //     kf.calc_altitude().await.unwrap();
+        // println!("pres: {}\ntemp {}", temp.get::<thermodynamic_temperature::degree_fahrenheit>(), pres.get::<pressure::pascal>());
 
-    //     let h = kf.altitude().get::<length::centimeter>();
-    //     // let baro = kf.baro_alt().await.get::<length::centimeter>();
+        let alt = baro.get_altitude().await.unwrap();
+        info!("alt is {}", &alt.get::<length::centimeter>());
 
-    //     info!("height: {} cm", h);
-    //     // info!("baro: {}", &baro);
-    // }
-
-        kf.calc_atitude().await.unwrap();
-
-    //     let q = kf.atitude();
-
-    //     // let (roll, pitch, yaw) = kf.state().to_euler();
-    //     // info!("r: {}", roll * 57.2958);
-    //     // info!("p: {}", pitch * 57.2958);
-    //     // info!("y: {}", yaw * 57.2958);
-
-    //     let up = kf.atitude().conj().rotate(F32x3 { x: 0.0, y: 0.0, z: 1.0 });
-    //     // let tilt_deg = libm::acosf(up.z.clamp(-1.0, 1.0)) * 180.0 / core::f32::consts::PI;
-
-
-    //         // kf.imu_dat().await;
-    //         // info!("q: {} {} {} {}\n", q.w(), q.x(), q.y(), q.z());
-
-    //         info!("up.x: {}", up.x);
-    //         info!("up.y: {}", up.y);
-    //         info!("up.z: {}\n", up.z);
-
-    //         const RAD: f32 = 180.0 / core::f32::consts::PI;
-            
-    //         let tilt   = libm::acosf(up.z.clamp(-1.0, 1.0)) * RAD;  // 0..180 off vertical
-    //         let lean_x = libm::asinf(up.x.clamp(-1.0, 1.0)) * RAD;  // -90..+90 toward PCB normal
-    //         let lean_y = libm::asinf(up.y.clamp(-1.0, 1.0)) * RAD;  // -90..+90 toward right
-
-    //         info!("tilt: {}", &&tilt);
-    //         info!("lean_x: {}", &&lean_x);
-    //         info!("lean_y: {}\n", &&lean_y);
-
-            
-
-    //     Timer::after_millis(10).await;
-    // }
-
+        Timer::after_millis(10).await;
+    }
 }
 
 fn enable_interrupts() {
