@@ -48,7 +48,7 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
         baro.write(0x1D, 0x03).await.map_err(|_| BarometerError::I2C)?;
 
         // configure iir
-        baro.write(0x1F, 0b0000_0110).await.map_err(|_| BarometerError::I2C)?;
+        baro.write(0x1F, 0b0000_0010).await.map_err(|_| BarometerError::I2C)?;
 
         // configure pwr
         baro.write(0x1B, 0b00_11_00_11).await.map_err(|_| BarometerError::I2C)?;
@@ -82,7 +82,14 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
 /// actual thing
 impl<B: I2c, D: DelayNs> Bmp<B, D> {
 
-    pub async fn read_measurement(&mut self) -> Result<(Pressure, ThermodynamicTemperature), BarometerError> {
+    pub async fn read_measurement(&mut self) -> Result<Option<(Pressure, ThermodynamicTemperature)>, BarometerError> {
+        let status = self.read(0x03).await?;
+        const ERR_MASK: u8 = 1 << 5;
+        if status & ERR_MASK == 0 {
+            //not ready
+            return Ok(Option::None)
+        }
+
         let mut raw = [0u8; 6];
         self.i2c.write_read(ADDRESS, &[0x04], &mut raw).await.map_err(|_| BarometerError::I2C)?;
     
@@ -112,25 +119,30 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
 
         // debug!("raw_p {} raw_t {} comp_p {} t_lin {}", uncomp_pres, uncomp_temp, comp_pres, cal.t_lin);
 
-        Ok((
+        Ok(Some((
             Pressure::new::<pressure::pascal>(comp_pres), 
             ThermodynamicTemperature::new::<thermodynamic_temperature::degree_celsius>(cal.t_lin),
-        ))
+        )))
     }
 
-    pub async fn get_altitude(&mut self) -> Result<Length, BarometerError> {
+    pub async fn get_altitude(&mut self) -> Result<Option<Length>, BarometerError> {
         const R_SPECIFIC: f32 = 287.05;
         const G: f32 = 9.80665;
 
-        let (pressure, temperature) = self.read_measurement().await?;
+        let result = self.read_measurement().await;
+
+        let Ok(Some((pressure, temperature))) = result else {
+            return Ok(Option::None)
+        };
+
         let p = pressure.get::<pascal>();
 
         let p_ref = self.ref_pressure.get_or_insert(pressure).get::<pascal>();
         let t = temperature.get::<thermodynamic_temperature::kelvin>();
 
-        Ok(Length::new::<length::meter>(
+        Ok(Some(Length::new::<length::meter>(
             (R_SPECIFIC * t / G) * libm::logf(p_ref / p),
-        ))
+        )))
     }
 }
 

@@ -34,5 +34,5 @@ pub enum BarometerError{
     #[error("I2C Error")]
     I2C,
     #[error("Array Error")]
-    Array(TryFromSliceError)
+    Array(TryFromSliceError),
 }

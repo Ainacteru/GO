@@ -5,7 +5,7 @@ use defmt::info;
 use embassy_time::Instant;
 use uom::si::{acceleration, f32::{Acceleration, Length, Velocity}, length::{self}, velocity};
 
-use crate::{control::error::KalmanFilterError, sensors::{bmp::Bmp, imu::Imu}, util::math::matrix::{Matrix, matrix3x1::{Matrix1x3, Matrix3x1}, matrix3x3::Matrix3x3}};
+use crate::{control::error::KalmanFilterError::{self, BarometerErr}, sensors::{bmp::Bmp, error::BarometerError, imu::Imu}, util::math::matrix::{Matrix, matrix3x1::{Matrix1x3, Matrix3x1}, matrix3x3::Matrix3x3}};
 use micromath::{Quaternion, vector::F32x3};
 
 struct AltitudeEstimation {
@@ -268,9 +268,13 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
     }
 
     async fn altitude_correct(&mut self) -> Result<(), KalmanFilterError> {
-        let baro_alt = self.baro.get_altitude().await
-            .map_err(KalmanFilterError::BarometerErr)?
-            .get::<length::meter>();
+        let Some(baro_alt) = 
+        self.baro.get_altitude().await.map_err(KalmanFilterError::BarometerErr)? else {
+            return Ok(())
+        };
+        let baro_alt = baro_alt.get::<length::meter>();
+            
+            
 
         let height = self.alt_state_estimation.height.get::<length::meter>();
 
@@ -279,7 +283,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
         let y = baro_alt - height;
 
-        const BARO_VAR: f32 = 0.0062;
+        const BARO_VAR: f32 = 0.0056;
 
         let s = h * self.alt_error_covariance * h.transpose() + BARO_VAR;
 
@@ -325,9 +329,8 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
     pub fn altitude(&self) -> Length {
         self.alt_state_estimation.height
     }
-
-    pub async fn baro_alt(&mut self) -> Result<Length, KalmanFilterError> {
-        self.baro.get_altitude().await.map_err(KalmanFilterError::BarometerErr)
+    pub fn vertical_velocity(&self) -> Velocity {
+        self.alt_state_estimation.vertical_velocity
     }
 
     /// using libm instead of micromath's normalize 

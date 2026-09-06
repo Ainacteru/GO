@@ -10,11 +10,11 @@ use atsamd_hal::{
 use defmt::{info, println, warn};
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
-use embassy_time::{Delay, Instant, Timer};
+use embassy_time::{Delay, Duration, Instant, Ticker, Timer};
 use go::{ Pins, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::{bmp::Bmp, imu::Imu} };
 use libm::{asin, atan2f};
 use micromath::{F32Ext, vector::F32x3};
-use uom::si::{length, pressure, thermodynamic_temperature};
+use uom::si::{length, pressure, thermodynamic_temperature, velocity};
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -58,20 +58,17 @@ async fn main(spawner: Spawner) {
 
     let mut kf = KalmanFilter::new(imu, baro);
 
-    let mut last = 0.0;
-    let mut drift = 0.0;
+    let mut ticker = Ticker::every(Duration::from_millis(10));
     loop {
 
+        kf.calc_orientation().await.unwrap();
         kf.calc_altitude().await.unwrap();
 
         info!("altitude {} m", &kf.altitude().get::<length::meter>());
-        info!("baro {} m", &kf.baro_alt().await.unwrap().get::<length::meter>());
+        info!("velocity {} m", &kf.vertical_velocity().get::<velocity::meter_per_second>());
 
-        drift = kf.altitude().get::<length::meter>() - last;
-        info!("drift {}\n", &drift);
-        last = kf.altitude().get::<length::meter>();
-
-        Timer::after_millis(10).await;
+        // info!("baro {} m", &kf.baro_alt().await.unwrap().get::<length::meter>());
+        ticker.next().await;
     }
 }
 
