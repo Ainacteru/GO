@@ -7,11 +7,11 @@ use core::f32;
 use atsamd_hal::{
     clock::GenericClockController, dmac::{DmaController, PriorityLevel}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::_atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin, sercom::Sercom4,
 };
-use defmt::{info, println};
+use defmt::{info, println, warn};
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
-use embassy_time::{Delay, Timer};
-use go::{ Pins, communcation::{time_driver, usb::Usb}, peripherals, sensors::{bmp::Bmp, imu::Imu} };
+use embassy_time::{Delay, Instant, Timer};
+use go::{ Pins, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::{bmp::Bmp, imu::Imu} };
 use libm::{asin, atan2f};
 use micromath::{F32Ext, vector::F32x3};
 use uom::si::{length, pressure, thermodynamic_temperature};
@@ -53,16 +53,23 @@ async fn main(spawner: Spawner) {
 
     Timer::after_secs(2).await;
 
-    // let imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
-    let mut baro = Bmp::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
+    let imu = Imu::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
+    let baro = Bmp::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
 
+    let mut kf = KalmanFilter::new(imu, baro);
+
+    let mut last = 0.0;
+    let mut drift = 0.0;
     loop {
-        // let (pres, temp) = baro.read_measurement().await.unwrap();
 
-        // println!("pres: {}\ntemp {}", temp.get::<thermodynamic_temperature::degree_fahrenheit>(), pres.get::<pressure::pascal>());
+        kf.calc_altitude().await.unwrap();
 
-        let alt = baro.get_altitude().await.unwrap();
-        info!("alt is {}", &alt.get::<length::centimeter>());
+        info!("altitude {} m", &kf.altitude().get::<length::meter>());
+        info!("baro {} m", &kf.baro_alt().await.unwrap().get::<length::meter>());
+
+        drift = kf.altitude().get::<length::meter>() - last;
+        info!("drift {}\n", &drift);
+        last = kf.altitude().get::<length::meter>();
 
         Timer::after_millis(10).await;
     }

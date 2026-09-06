@@ -1,6 +1,4 @@
 use core::{array::TryFromSliceError, fmt::Debug};
-
-use embassy_embedded_hal::shared_bus::I2cDeviceError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
