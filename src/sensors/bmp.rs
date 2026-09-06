@@ -1,8 +1,5 @@
-use core::{array::TryFromSliceError, todo};
-
 use atsamd_hal::{ehal::i2c::SevenBitAddress, ehal_async::{delay::DelayNs, i2c::I2c}};
 use defmt::{debug, error, info};
-use micromath::F32Ext;
 use uom::si::{f32::{Length, Pressure, ThermodynamicTemperature}, length, pressure::{self, pascal}, thermodynamic_temperature};
 
 use crate::sensors::error::BarometerError;
@@ -17,7 +14,7 @@ pub struct Bmp<B, D>
     i2c: B,
     delay: D,
     cal_coefs: CompensationCoefficients,
-    prev_alt: Option<Length>,
+    ref_pressure: Option<Pressure>,
 }
 
 impl<B: I2c, D: DelayNs> Bmp<B, D> {
@@ -38,7 +35,7 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
             i2c,
             delay,
             cal_coefs: cal,
-            prev_alt: None,
+            ref_pressure: None,
         };
 
         baro.write(0x7E, 0xB6).await.map_err(|_| BarometerError::I2C)?;
@@ -51,7 +48,7 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
         baro.write(0x1D, 0x03).await.map_err(|_| BarometerError::I2C)?;
 
         // configure iir
-        baro.write(0x1F, 0b0000_0110).await.map_err(|_| BarometerError::I2C)?;
+        baro.write(0x1F, 0b0000_0010).await.map_err(|_| BarometerError::I2C)?;
 
         // configure pwr
         baro.write(0x1B, 0b00_11_00_11).await.map_err(|_| BarometerError::I2C)?;
@@ -80,45 +77,25 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
 
         Ok(())
     }
-
-
-    // pub fn elevation_from_pressure(&self, pres: Pressure) -> Length {
-    //     let p = pres.get::<pascal>();
-    //     let meters = 44_330.0 * (1.0 - libm::powf(p / 101_325.0, 0.19026));
-    //     Length::new::<uom::si::length::meter>(meters)
-    // }
-    // pub async fn change_in_altitude(&mut self) -> Length {
-    //     let mes = self.inner().read_latest_measurement().await.unwrap().into_uom();
-    //     let pres = mes.pressure_pascal();
-    //     let elevation = self.elevation_from_pressure(pres);
-
-    //     if self.prev_alt.is_none() {
-    //         self.prev_alt = Some(elevation);
-    //     }
-
-    //     debug!("baro: {} cm", elevation.get::<length::centimeter>() - self.prev_alt.unwrap().get::<length::centimeter>());
-
-    //     elevation - self.prev_alt.unwrap()
-    // }
-    // pub async fn altitude(&mut self) -> Length {
-    //     let mes = self.inner().read_latest_measurement().await.unwrap().into_uom();
-    //     let pres = mes.pressure_pascal();
-        
-
-    //     self.elevation_from_pressure(pres)
-    // }
 }
 
+/// actual thing
 impl<B: I2c, D: DelayNs> Bmp<B, D> {
 
-    pub async fn read_measurement(&mut self) -> Result<(Pressure, ThermodynamicTemperature), BarometerError> {
+    pub async fn read_measurement(&mut self) -> Result<Option<(Pressure, ThermodynamicTemperature)>, BarometerError> {
+        let status = self.read(0x03).await?;
+        const ERR_MASK: u8 = 1 << 5;
+        if status & ERR_MASK == 0 {
+            //not ready
+            return Ok(Option::None)
+        }
+
         let mut raw = [0u8; 6];
         self.i2c.write_read(ADDRESS, &[0x04], &mut raw).await.map_err(|_| BarometerError::I2C)?;
     
         let uncomp_pres = ((raw[2] as u32) << 16) | ((raw[1] as u32) << 8) | (raw[0] as u32);
         let uncomp_temp = ((raw[5] as u32) << 16) | ((raw[4] as u32) << 8) | (raw[3] as u32);
     
-        // temperature first - pressure compensation needs t_lin
         let cal = &mut self.cal_coefs;
         let pd1 = uncomp_temp as f32 - cal.PAR_T1;
         let pd2 = pd1 * cal.PAR_T2;
@@ -140,28 +117,32 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
         let partial_data4 = partial_data3 + (uncomp_pres as f32 * uncomp_pres as f32 * uncomp_pres as f32 ) * cal.PAR_P11;
         let comp_pres = partial_out1 + partial_out2 + partial_data4;
 
-        info!("raw_p {} raw_t {} comp_p {} t_lin {}",
-        uncomp_pres, uncomp_temp, comp_pres, cal.t_lin);
+        // debug!("raw_p {} raw_t {} comp_p {} t_lin {}", uncomp_pres, uncomp_temp, comp_pres, cal.t_lin);
 
-        Ok((
+        Ok(Some((
             Pressure::new::<pressure::pascal>(comp_pres), 
             ThermodynamicTemperature::new::<thermodynamic_temperature::degree_celsius>(cal.t_lin),
-        ))
+        )))
     }
 
-    /// gets the change in altitude
-    pub async fn get_altitude(&mut self) -> Result<Length, BarometerError>{
-        let (pressure, _) = self.read_measurement().await.map_err(|_| BarometerError::I2C)?;
+    pub async fn get_altitude(&mut self) -> Result<Option<Length>, BarometerError> {
+        const R_SPECIFIC: f32 = 287.05;
+        const G: f32 = 9.80665;
 
-        let ratio = pressure.get::<pressure::pascal>() / 101325.0;
-        let height = Length::new::<length::meter>(44330.8 * (1.0 - libm::powf(ratio, 0.190263)));
-        //libm powf is more accurate than micromath's :(
+        let result = self.read_measurement().await;
 
-        if self.prev_alt.is_none() {
-            self.prev_alt = Some(height);
-        }
+        let Ok(Some((pressure, temperature))) = result else {
+            return Ok(Option::None)
+        };
 
-        Ok(height - self.prev_alt.unwrap())
+        let p = pressure.get::<pascal>();
+
+        let p_ref = self.ref_pressure.get_or_insert(pressure).get::<pascal>();
+        let t = temperature.get::<thermodynamic_temperature::kelvin>();
+
+        Ok(Some(Length::new::<length::meter>(
+            (R_SPECIFIC * t / G) * libm::logf(p_ref / p),
+        )))
     }
 }
 
@@ -204,7 +185,7 @@ impl CompensationCoefficients {
         let mut trimming_coeffs = [0u8; 21];
         i2c.write_read(ADDRESS, &[0x31], &mut trimming_coeffs).await.map_err(|_| BarometerError::I2C)?;
 
-        Ok(Self {
+        Ok( Self {
             t_lin: 0.0,
             PAR_T1: u16::from_le_bytes(trimming_coeffs[0..2].try_into().map_err(BarometerError::Array)?) as f32 / 0.00390625,
             PAR_T2: u16::from_le_bytes(trimming_coeffs[2..4].try_into().map_err(BarometerError::Array)?) as f32 / 1073741824.0,
@@ -219,7 +200,8 @@ impl CompensationCoefficients {
             PAR_P8: trimming_coeffs[16] as i8 as f32 / 32768.0,
             PAR_P9: i16::from_le_bytes(trimming_coeffs[17..19].try_into().map_err(BarometerError::Array)?) as f32 / 281474976710656.0,
             PAR_P10: trimming_coeffs[19] as i8 as f32 / 281474976710656.0,
-            PAR_P11: trimming_coeffs[20] as i8 as f32 / 3.689348814741910e19,
+            // PAR_P11: trimming_coeffs[20] as i8 as f32 / 3.689348814741910e19,
+            PAR_P11: trimming_coeffs[20] as i8 as f32 / 3.689_349e19,
         })
     }
 }
