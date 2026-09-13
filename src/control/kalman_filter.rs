@@ -5,7 +5,7 @@ use defmt::info;
 use embassy_time::Instant;
 use uom::si::{acceleration, f32::{Acceleration, Length, Velocity}, length::{self}, velocity};
 
-use crate::{control::error::KalmanFilterError::{self, BarometerErr}, sensors::{bmp::Bmp, error::BarometerError, imu::Imu}, util::math::matrix::{Matrix, matrix3x1::{Matrix1x3, Matrix3x1}, matrix3x3::Matrix3x3}};
+use crate::{control::error::KalmanFilterError::{self}, sensors::{bmp::Bmp, imu::Imu}, util::math::matrix::{Matrix, matrix3x1::{Matrix1x3, Matrix3x1}, matrix3x3::Matrix3x3}};
 use micromath::{Quaternion, vector::F32x3};
 
 struct AltitudeEstimation {
@@ -321,7 +321,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
     }
 
-    /// Returns the atitude state
+    /// Returns the atitude state 
     pub fn atitude(&self) -> Quaternion {
         self.orien_state_estimation
     }

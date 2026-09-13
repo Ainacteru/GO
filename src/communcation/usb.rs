@@ -1,15 +1,17 @@
 use core::{cell::RefCell};
 
-use atsamd_hal::{clock::GenericClockController, pac::Pm, usb::UsbBus};
+use atsamd_hal::{clock::GenericClockController, pac::{Pm, SCB}, usb::UsbBus};
 use cortex_m::{interrupt::Mutex, singleton};
 use atsamd_hal::pac::interrupt;
 use usb_device::{LangID, bus::UsbBusAllocator, device::{StringDescriptors, UsbDevice, UsbDeviceBuilder, UsbVidPid}};
 use usbd_serial::{SerialPort, USB_CLASS_CDC};
 
-use crate::usb_allocator;
+use crate::communcation::command_parser::{CommandParser, CommandSource};
 
 pub static USB_SERIAL: Mutex<RefCell<Option<SerialPort<'static, UsbBus>>>> = Mutex::new(RefCell::new(None));
 static USB_DEVICE: Mutex<RefCell<Option<UsbDevice<'static, UsbBus>>>> = Mutex::new(RefCell::new(None));
+
+static USB_PARSER: Mutex<RefCell<CommandParser>> = Mutex::new(RefCell::new(CommandParser::new()));
 
 pub struct Usb; 
 
@@ -24,6 +26,8 @@ impl Usb {
     ) 
     {
         cortex_m::interrupt::free(|cs| {
+            use crate::usb_allocator;
+
 
             
             let usb_alloc_ref = singleton!(: UsbBusAllocator<UsbBus> = usb_allocator(_usb, _clock, pm, dm, dp));
@@ -45,31 +49,45 @@ impl Usb {
 fn poll_usb() {
     cortex_m::interrupt::free(|cs| {
         let mut serial_ref = USB_SERIAL.borrow(cs).borrow_mut();
-        let serial = serial_ref.as_mut();
-        
         let mut dev_ref = USB_DEVICE.borrow(cs).borrow_mut();
-        let usb_device =  dev_ref.as_mut();
 
-        if let (Some(_device), Some(serial)) = (&usb_device, serial) {
-            usb_device.unwrap().poll(&mut [serial]);
+        let Some(serial) = serial_ref.as_mut() else {
+            return
+        };
 
-            let mut buf = [0u8; 64];
+        let Some(device) = dev_ref.as_mut() else {
+            return
+        };
 
-            if let Ok(count) = serial.read(&mut buf) {
-                for (i, c) in buf.iter().enumerate() {
-                    let c = *c as char;
-                    if i >= count {
-                        break;
-                    }
-                    match c {
-                        '\r' => { serial.write(b"\r\n").ok(); }
-                        _ => { serial.write(&[c as u8]).ok(); }
-                    }
-                }
-            };
+        if !device.poll(&mut [serial]) {
+            return;
+        }
+
+        let mut buf = [0u8; 64];
+
+       if let Ok(count) = serial.read(&mut buf) {
+            for &byte in &buf[..count] {
+                serial.write(&[byte]).ok();
+                feed_usb(byte);
+            }
         }
     });
 }
+
+fn feed_usb(byte: u8) {
+    let command = cortex_m::interrupt::free(|cs| {
+        USB_PARSER
+            .borrow(cs)
+            .borrow_mut()
+            .push(byte)
+    });
+
+    if let Some(command) = command {
+        CommandParser::handle_command(CommandSource::Usb, command);
+    }
+}
+
+
 
 #[interrupt]
 fn USB() {

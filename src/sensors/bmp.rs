@@ -1,6 +1,6 @@
 use atsamd_hal::{ehal::i2c::SevenBitAddress, ehal_async::{delay::DelayNs, i2c::I2c}};
-use defmt::{debug, error, info};
-use uom::si::{f32::{Length, Pressure, ThermodynamicTemperature}, length, pressure::{self, pascal}, thermodynamic_temperature};
+use defmt::{debug, error};
+use uom::si::{f32::{Length, Pressure, ThermodynamicTemperature}, length, pressure::{self, pascal}, thermodynamic_temperature::{self}};
 
 use crate::sensors::error::BarometerError;
 
