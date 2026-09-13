@@ -2,19 +2,16 @@
 #![no_main]
 
 
-use core::f32;
 
 use atsamd_hal::{
-    clock::GenericClockController, dmac::{DmaController, PriorityLevel}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::_atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin, sercom::Sercom4,
+    clock::GenericClockController, dmac::{DmaController, PriorityLevel}, fugit::RateExtU32, gpio::{Output, PA17, Pin}, pac::{Interrupt, NVIC, Peripherals, Sercom3, Tc4}, prelude::{_atsamd_hal_embedded_hal_digital_v2_OutputPin, _atsamd_hal_embedded_hal_digital_v2_ToggleableOutputPin}, sercom::Sercom4,
 };
-use defmt::{info, println, warn};
+use defmt::info;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
-use embassy_time::{Delay, Duration, Instant, Ticker, Timer};
-use go::{ Pins, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::{bmp::Bmp, imu::Imu} };
-use libm::{asin, atan2f};
-use micromath::{F32Ext, vector::F32x3};
-use uom::si::{length, pressure, thermodynamic_temperature, velocity};
+use embassy_time::{Delay, Duration, Ticker, Timer};
+use go::{ Pins, RgbBlue, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::{bmp::Bmp, imu::Imu} };
+use uom::si::{length, velocity};
 
 atsamd_hal::bind_interrupts!(struct Irqs {
     SERCOM3 => atsamd_hal::sercom::i2c::InterruptHandler<Sercom3>;
@@ -57,6 +54,7 @@ async fn main(spawner: Spawner) {
     let baro = Bmp::new(I2cDevice::new(i2c.bus()), Delay).await.unwrap();
 
     let mut kf = KalmanFilter::new(imu, baro);
+    let mut blue: RgbBlue = pins.rgb_blue.into();
 
     let mut ticker = Ticker::every(Duration::from_millis(10));
     loop {
@@ -64,8 +62,15 @@ async fn main(spawner: Spawner) {
         kf.calc_orientation().await.unwrap();
         kf.calc_altitude().await.unwrap();
 
+        let velocity = kf.vertical_velocity().get::<velocity::meter_per_second>();
         info!("altitude {} m", &kf.altitude().get::<length::meter>());
-        info!("velocity {} m", &kf.vertical_velocity().get::<velocity::meter_per_second>());
+        info!("velocity {} m", velocity);
+
+        if velocity.abs() > 1.0 {
+            blue.set_high();
+        } else {
+            blue.set_low();
+        }
 
         // info!("baro {} m", &kf.baro_alt().await.unwrap().get::<length::meter>());
         ticker.next().await;
