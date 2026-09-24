@@ -25,7 +25,7 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
         i2c.write_read(ADDRESS, &[0x00], &mut addr_buf).await.map_err(|_| BarometerError::I2C)?;
 
         if addr_buf[0] == 0x60 {
-            debug!("addr: {:#02X}", &addr_buf[0]);
+            debug!("Found barometer with address: {:#02X}", &addr_buf[0]);
         } else {
             error!("Barometer address not matching 0x60, found: {:#02X}", &addr_buf[0])
         }
@@ -53,7 +53,7 @@ impl<B: I2c, D: DelayNs> Bmp<B, D> {
         // configure pwr
         baro.write(0x1B, 0b00_11_00_11).await.map_err(|_| BarometerError::I2C)?;
 
-        baro.delay.delay_ms(50).await;
+        baro.delay.delay_ms(20).await;
 
         let pwr = baro.read(0x1B).await?;    // should read back 0x33
         let err = baro.read(0x02).await?;    // ERR_REG: bit2 = conf_err  <- the one to watch

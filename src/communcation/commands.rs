@@ -1,5 +1,4 @@
 use atsamd_hal::pac::SCB;
-use defmt::info;
 
 
 

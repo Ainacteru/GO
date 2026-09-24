@@ -1,4 +1,4 @@
-use core::f32;
+use core::{f32, todo};
 
 use atsamd_hal::{ehal::i2c::SevenBitAddress, ehal_async::{delay::DelayNs, i2c::I2c}};
 use defmt::info;
@@ -12,20 +12,22 @@ struct AltitudeEstimation {
     height: Length,
     vertical_velocity: Velocity,
     accel_bias: Acceleration,
+    error_covariance: Matrix3x3,
+}
+
+struct OrientationEstimation {
+    state_estimation: Quaternion,
+    error_covariance: Matrix3x3,
+    antiparallel_count: u32,
 }
 
 pub struct KalmanFilter <B: I2c<SevenBitAddress>, D: DelayNs> {
     imu: Imu<B, D>,
     baro: Bmp<B, D>,
 
-    oren_prev_time: Instant,
-    orien_state_estimation: Quaternion,
-    orien_error_covariance: Matrix3x3,
-    orien_antiparallel_count: u32,
-
-    alt_prev_time: Instant,
+    prev_time: Instant,
+    orientation_estimation: OrientationEstimation,
     alt_state_estimation: AltitudeEstimation,
-    alt_error_covariance: Matrix3x3,
 }
 
 impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
@@ -34,42 +36,48 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
             imu,
             baro,
 
-            oren_prev_time: Instant::now(),
-            alt_prev_time: Instant::now(),
+            prev_time: Instant::now(),
 
-            orien_state_estimation: Quaternion::IDENTITY,
-            orien_error_covariance: Matrix3x3::new_diagonal([0.01, 0.01, 0.01]),
-            orien_antiparallel_count: 0,
+            orientation_estimation: OrientationEstimation { 
+                state_estimation: Quaternion::IDENTITY,
+                error_covariance: Matrix3x3::new_diagonal([0.01, 0.01, 0.01]),
+                antiparallel_count: 0, 
+            },
 
             alt_state_estimation: AltitudeEstimation { 
                 height: Length::new::<length::meter>(0.0), 
                 vertical_velocity: Velocity::new::<velocity::meter_per_second>(0.0),
                 accel_bias: Acceleration::new::<acceleration::meter_per_second_squared>(0.0),
+                error_covariance: Matrix3x3::new_diagonal([1.0, 1.0, 1.0]),
             },
-            alt_error_covariance: Matrix3x3::new_diagonal([1.0, 1.0, 1.0]),
 
         }
     }
 }
-/// orientation
+
 impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
+    pub async fn calculate_state(&mut self) -> Result<(), KalmanFilterError> {
 
-    pub async fn calc_orientation(&mut self) -> Result<(), KalmanFilterError> {
-
-        //need an imu low pass filter
-        self.iir_filter().await?;
-
-        self.orientation_predict().await?;
-
-        self.orientation_correct().await?;
+        self.predict().await?;
+        self.correct().await?;
 
         Ok(())
     }
 
-    async fn orientation_predict(&mut self) -> Result<(), KalmanFilterError> {
+    pub async fn iir_filter(&mut self) -> Result<(), KalmanFilterError> {
+        todo!()
+    }
+
+    pub async fn predict(&mut self) -> Result<(), KalmanFilterError> {
+        // init
         const DEG2RAD: f32 = f32::consts::PI / 180.0;
         let gyro =  self.imu.get_gyro_data().await.map_err(KalmanFilterError::ImuErr)?;
+        let accel = self.imu.get_accel_data().await.map_err(KalmanFilterError::ImuErr)?;
 
+        let a_world = self.orientation_estimation.state_estimation.rotate(accel);
+        let measured_accel = (a_world.z - 1.0) * 9.80665;
+
+        // ORIENTATION
         let w = F32x3 {
           x: gyro.x * DEG2RAD,
           y: gyro.y * DEG2RAD,
@@ -78,15 +86,15 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
         let omega = Quaternion::new(0.0, w.x, w.y, w.z);
 
-        let q_dot = 0.5 * self.orien_state_estimation * omega; // f(x, u)
+        let q_dot = 0.5 * self.orientation_estimation.state_estimation * omega; // f(x, u)
 
         let now = Instant::now();
-        let dt = now.duration_since(self.oren_prev_time).as_micros() as f32 / 1000000.0;
+        let dt = now.duration_since(self.prev_time).as_micros() as f32 / 1000000.0;
         let dt = dt.min(0.05);
-        self.oren_prev_time = now;
+        self.prev_time = now;
 
         //euler integrrration yay
-        self.orien_state_estimation = Self::normalize_exact(self.orien_state_estimation + q_dot * dt);
+        self.orientation_estimation.state_estimation = Self::normalize_exact(self.orientation_estimation.state_estimation + q_dot * dt);
 
         // error covariance matrix update
 
@@ -109,132 +117,9 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         );
 
         // P = FPF^T + Q
-        self.orien_error_covariance = f * self.orien_error_covariance * f.transpose() + q_noise;
+        self.orientation_estimation.error_covariance = f * self.orientation_estimation.error_covariance * f.transpose() + q_noise;
 
-        Ok(())
-    }
-
-    async fn orientation_correct(&mut self) -> Result<(), KalmanFilterError> {
-        let accel = self.imu.get_accel_data().await.map_err(KalmanFilterError::ImuErr)?;
-        let gyro = self.imu.get_gyro_data().await.map_err(KalmanFilterError::ImuErr)?;
-
-        let mag = libm::sqrtf(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z);
-
-        if !(0.90..=1.15).contains(&mag) { // ouuuu
-            return Ok(())
-        }
-
-        // check if board is moving too fast
-        const MAX_RATE_FOR_CORRECTION: f32 = 60.0; // degs /s
-        let rate = libm::sqrtf(gyro.x*gyro.x + gyro.y*gyro.y + gyro.z*gyro.z);
-        
-        if rate > MAX_RATE_FOR_CORRECTION {
-            return Ok(()); // use the gyro only
-        }
-
-        let accel = F32x3 { x: accel.x / mag, y: accel.y / mag, z: accel.z / mag };
-
-        let gravity = F32x3 {
-            x: 0.0,
-            y: 0.0,
-            z: 1.0,
-        };
-
-        // R(q)
-        let prediction = self.orien_state_estimation.conj().rotate(gravity);
-
-        let dot = accel.x*prediction.x + accel.y*prediction.y + accel.z*prediction.z;
-  
-        if dot < 0.0 {
-            // only reset when genuinely still AND the accel really looks like pure gravity
-            if rate < 5.0 && (mag - 1.0).abs() < 0.02 {
-                self.orien_antiparallel_count += 1;
-                if self.orien_antiparallel_count > 20 {          // ~0.3 s of agreement
-                    let fix = Quaternion::from_two_vectors(prediction, accel);
-                    self.orien_state_estimation = Self::normalize_exact(self.orien_state_estimation * fix);
-                    self.orien_error_covariance = Matrix3x3::new_diagonal([0.01, 0.01, 0.01]);
-                    self.orien_antiparallel_count = 0;
-                }
-            } else {
-                self.orien_antiparallel_count = 0;
-            }
-            return Ok(());
-        }
-        self.orien_antiparallel_count = 0;
-
-        let innovation = accel - prediction;
-
-        let h = Matrix3x3::from_array( [
-            [0.0, -prediction.z, prediction.y],
-            [prediction.z, 0.0, -prediction.x],
-            [-prediction.y, prediction.x, 0.0],
-        ] );
-
-        // let accel_dens = imu::ACCEL_NOISE *1e-6;
-        // let rms= accel_dens * imu::ACCEL_BANDWIDTH.sqrt();
-
-        // let accel_noise = Matrix3x3::new_diagonal(
-        //     [rms * rms, rms * rms, rms * rms],
-        // );
-
-        const ACCEL_VAR: f32 = 0.01;
-        let accel_noise = Matrix3x3::new_diagonal([ACCEL_VAR, ACCEL_VAR, ACCEL_VAR]);
-
-        let s = h * self.orien_error_covariance * h.transpose() + accel_noise;
-        let kalman_gain = self.orien_error_covariance * h.transpose() * s.inverse().map_err(KalmanFilterError::Matrix)?;
-
-        let correction = kalman_gain * innovation;
-
-        let n = libm::sqrtf(correction.x*correction.x + correction.y*correction.y + correction.z*correction.z);
-        let max_corr = 0.7_f32;
-        let correction = if n > max_corr {
-            F32x3 { x: correction.x*max_corr/n, y: correction.y*max_corr/n, z: correction.z*max_corr/n }
-        } else { correction };
-
-        let dq = Self::normalize_exact(Quaternion::new(1.0, correction.x/2.0, correction.y/2.0, correction.z/2.0));
-
-        self.orien_state_estimation = Self::normalize_exact(self.orien_state_estimation * dq);
-
-        let i_kh = Matrix3x3::IDENTITY - kalman_gain * h;
-        self.orien_error_covariance = i_kh * self.orien_error_covariance * i_kh.transpose() + kalman_gain * accel_noise * kalman_gain.transpose();
-
-        Ok(())
-    }
-
-    async fn iir_filter(&mut self) -> Result<(), KalmanFilterError> {
-        // const ALPHA: f32 = 0.0;
-
-
-        Ok(())
-    }
-
-
-}
-
-impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
-
-    pub async fn calc_altitude(&mut self) -> Result<(), KalmanFilterError> {
-
-        self.altitude_predict().await?;
-        self.altitude_correct().await?;
-        
-        Ok(())
-    }
-
-    async fn altitude_predict(&mut self) -> Result<(), KalmanFilterError> {
-        let accel = self.imu.get_accel_data().await.map_err(KalmanFilterError::ImuErr)?;
-        let a_world = self.orien_state_estimation.rotate(accel);
-        let measured_accel = (a_world.z - 1.0) * 9.80665;
-
-        // measured_accel = true_accel + bias
-        // soo
-        // true_accel = measured_accel - bias
-        // find bias and subtract
-
-        let now = Instant::now();
-        let dt = now.duration_since(self.alt_prev_time).as_micros() as f32 / 1000000.0;
-        let dt = dt.min(0.05);
-        self.alt_prev_time = now;
+        //ALTITUDE
 
         // F
         let f = Matrix3x3::from_array([
@@ -261,33 +146,109 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
         let q = (b * b.transpose()) * ACCEL_VAR + Matrix3x3::new_diagonal([0.0, 0.0, BIAS_VAR * dt]);
 
         // P = FPF^T + Q
-        self.alt_error_covariance = f * self.alt_error_covariance * f.transpose() + q;
-
+        self.alt_state_estimation.error_covariance = f * self.alt_state_estimation.error_covariance * f.transpose() + q;
 
         Ok(())
     }
 
-    async fn altitude_correct(&mut self) -> Result<(), KalmanFilterError> {
+    pub async fn correct(&mut self) -> Result<(), KalmanFilterError> {
+        // init
+        let accel = self.imu.get_accel_data().await.map_err(KalmanFilterError::ImuErr)?;
+        let gyro = self.imu.get_gyro_data().await.map_err(KalmanFilterError::ImuErr)?;
+
         let Some(baro_alt) = 
         self.baro.get_altitude().await.map_err(KalmanFilterError::BarometerErr)? else {
             return Ok(())
         };
         let baro_alt = baro_alt.get::<length::meter>();
-            
-            
+        let alt_est = self.alt_state_estimation.height.get::<length::meter>();
 
-        let height = self.alt_state_estimation.height.get::<length::meter>();
+        //orientation
 
+        let mag = libm::sqrtf(accel.x*accel.x + accel.y*accel.y + accel.z*accel.z);
+
+        if !(0.90..=1.15).contains(&mag) { // ouuuu
+            return Ok(())
+        }
+
+        // check if board is moving too fast
+        const MAX_RATE_FOR_CORRECTION: f32 = 60.0; // degs /s
+        let rate = libm::sqrtf(gyro.x*gyro.x + gyro.y*gyro.y + gyro.z*gyro.z);
+        
+        if rate > MAX_RATE_FOR_CORRECTION {
+            return Ok(()); // use the gyro only
+        }
+
+        let accel = F32x3 { x: accel.x / mag, y: accel.y / mag, z: accel.z / mag };
+
+        let gravity = F32x3 {
+            x: 0.0,
+            y: 0.0,
+            z: 1.0,
+        };
+
+        // R(q)
+        let prediction = self.orientation_estimation.state_estimation.conj().rotate(gravity);
+
+        let dot = accel.x*prediction.x + accel.y*prediction.y + accel.z*prediction.z;
+  
+        if dot < 0.0 {
+            // only reset when genuinely still AND the accel really looks like pure gravity
+            if rate < 5.0 && (mag - 1.0).abs() < 0.02 {
+                self.orientation_estimation.antiparallel_count += 1;
+                if self.orientation_estimation.antiparallel_count > 20 {          // ~0.3 s of agreement
+                    let fix = Quaternion::from_two_vectors(prediction, accel);
+                    self.orientation_estimation.state_estimation = Self::normalize_exact(self.orientation_estimation.state_estimation * fix);
+                    self.orientation_estimation.error_covariance = Matrix3x3::new_diagonal([0.01, 0.01, 0.01]);
+                    self.orientation_estimation.antiparallel_count = 0;
+                }
+            } else {
+                self.orientation_estimation.antiparallel_count = 0;
+            }
+            return Ok(());
+        }
+        self.orientation_estimation.antiparallel_count = 0;
+
+        let innovation = accel - prediction;
+
+        let h = Matrix3x3::from_array( [
+            [0.0, -prediction.z, prediction.y],
+            [prediction.z, 0.0, -prediction.x],
+            [-prediction.y, prediction.x, 0.0],
+        ] );
+
+        const ACCEL_VAR: f32 = 0.01;
+        let accel_noise = Matrix3x3::new_diagonal([ACCEL_VAR, ACCEL_VAR, ACCEL_VAR]);
+
+        let s = h * self.orientation_estimation.error_covariance * h.transpose() + accel_noise;
+        let kalman_gain = self.orientation_estimation.error_covariance * h.transpose() * s.inverse().map_err(KalmanFilterError::Matrix)?;
+
+        let correction = kalman_gain * innovation;
+
+        let n = libm::sqrtf(correction.x*correction.x + correction.y*correction.y + correction.z*correction.z);
+        let max_corr = 0.7_f32;
+        let correction = if n > max_corr {
+            F32x3 { x: correction.x*max_corr/n, y: correction.y*max_corr/n, z: correction.z*max_corr/n }
+        } else { correction };
+
+        let dq = Self::normalize_exact(Quaternion::new(1.0, correction.x/2.0, correction.y/2.0, correction.z/2.0));
+
+        self.orientation_estimation.state_estimation = Self::normalize_exact(self.orientation_estimation.state_estimation * dq);
+
+        let i_kh = Matrix3x3::IDENTITY - kalman_gain * h;
+        self.orientation_estimation.error_covariance = i_kh * self.orientation_estimation.error_covariance * i_kh.transpose() + kalman_gain * accel_noise * kalman_gain.transpose();
+
+        //height
 
         let h = Matrix1x3::from_array([1.0, 0.0, 0.0]);
 
-        let y = baro_alt - height;
+        let y = baro_alt - alt_est;
 
         const BARO_VAR: f32 = 0.0056;
 
-        let s = h * self.alt_error_covariance * h.transpose() + BARO_VAR;
+        let s = h * self.alt_state_estimation.error_covariance * h.transpose() + BARO_VAR;
 
-        let k = (self.alt_error_covariance * h.transpose()) * (1.0 / s);
+        let k = (self.alt_state_estimation.error_covariance * h.transpose()) * (1.0 / s);
 
         let x = Matrix3x1::from_array([
             self.alt_state_estimation.height.get::<length::meter>(),
@@ -302,8 +263,8 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
         // P = (I - K*H) P (I - K*H)^T + K*R*K^T
         let i_kh = Matrix3x3::IDENTITY - k * h;
-        self.alt_error_covariance =
-            i_kh * self.alt_error_covariance * i_kh.transpose()
+        self.alt_state_estimation.error_covariance =
+            i_kh * self.alt_state_estimation.error_covariance * i_kh.transpose()
             + (k * BARO_VAR) * k.transpose();
 
         Ok(())
@@ -323,7 +284,7 @@ impl <B: I2c<SevenBitAddress>, D: DelayNs> KalmanFilter <B, D> {
 
     /// Returns the atitude state 
     pub fn atitude(&self) -> Quaternion {
-        self.orien_state_estimation
+        self.orientation_estimation.state_estimation
     }
 
     pub fn altitude(&self) -> Length {
