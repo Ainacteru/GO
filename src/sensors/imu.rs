@@ -49,7 +49,7 @@ impl<B, D> Imu<B, D>
         let addr = addr_buf[0];
 
         match addr {
-            0x43 => debug!("Found imu with addr {:#02X}", &addr),
+            0x43 => debug!("Found imu with address {:#02X}", &addr),
             _ => error!("Imu address not matching 0x43, found: {:#02X}", &addr),
         }
 
@@ -58,7 +58,7 @@ impl<B, D> Imu<B, D>
         let err_buf = imu.read(0x01).await.map_err(|_| ImuError::I2C)?;
         let dev_status = err_buf[0];
 
-        debug!("dev status {}", &dev_status);
+        debug!("Imu device status is {}; (0 is good)", &dev_status);
 
         if dev_status != 0 {
             return Err(ImuError::Power);
@@ -67,7 +67,7 @@ impl<B, D> Imu<B, D>
         let status_buf = imu.read(0x02).await.map_err(|_| ImuError::I2C)?;
         let sensor_status = status_buf[0];
 
-        debug!("sens status {}", &sensor_status);
+        debug!("Imu sensor status is {}; (1 is good)", &sensor_status);
 
         if sensor_status & 1 == 0 {
             return Err(ImuError::Initialization);

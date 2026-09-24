@@ -11,3 +11,8 @@ rustflags = [
 
 [env]
 DEFMT_LOG = "trace"
+
+[alias]
+# 'cargo flash' = 'cargo run --release' with the runner swapped for the
+# flash-only one, so it builds and uploads but starts no defmt session.
+flash = ["run", "--release", "--config", "target.thumbv6m-none-eabi.runner='tools/flash.sh'"]

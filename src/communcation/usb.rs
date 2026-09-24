@@ -1,6 +1,6 @@
 use core::{cell::RefCell};
 
-use atsamd_hal::{clock::GenericClockController, pac::{Pm, SCB}, usb::UsbBus};
+use atsamd_hal::{clock::GenericClockController, pac::{Pm}, usb::UsbBus};
 use cortex_m::{interrupt::Mutex, singleton};
 use atsamd_hal::pac::interrupt;
 use usb_device::{LangID, bus::UsbBusAllocator, device::{StringDescriptors, UsbDevice, UsbDeviceBuilder, UsbVidPid}};

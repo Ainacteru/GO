@@ -10,7 +10,7 @@ use defmt::info;
 use embassy_embedded_hal::shared_bus::asynch::i2c::I2cDevice;
 use embassy_executor::Spawner;
 use embassy_time::{Delay, Duration, Ticker, Timer};
-use go::{ Pins, RgbBlue, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::{bmp::Bmp, imu::Imu} };
+use go::{ Led, Pins, RgbBlue, communcation::{time_driver, usb::Usb}, control::kalman_filter::KalmanFilter, peripherals, sensors::{bmp::Bmp, imu::Imu} };
 use uom::si::{length, velocity};
 
 atsamd_hal::bind_interrupts!(struct Irqs {
@@ -38,7 +38,7 @@ async fn main(spawner: Spawner) {
 
     enable_interrupts();
 
-    let led = pins.led.into_push_pull_output();
+    let led: Led = pins.led.into();
     spawner.spawn(blink(led).unwrap());
 
     let dmac = DmaController::init(peripherals.dmac, &mut peripherals.pm);
@@ -58,9 +58,9 @@ async fn main(spawner: Spawner) {
 
     let mut ticker = Ticker::every(Duration::from_millis(10));
     loop {
-
-        kf.calc_orientation().await.unwrap();
-        kf.calc_altitude().await.unwrap();
+        
+        kf.calculate_state().await.unwrap();
+        info!("quaterinion w: {}, x: {}, y: {}, z: {}", kf.atitude().w(), kf.atitude().x(), kf.atitude().y(), kf.atitude().z());
 
         let velocity = kf.vertical_velocity().get::<velocity::meter_per_second>();
         info!("altitude {} m", &kf.altitude().get::<length::meter>());
@@ -72,7 +72,6 @@ async fn main(spawner: Spawner) {
             blue.set_low();
         }
 
-        // info!("baro {} m", &kf.baro_alt().await.unwrap().get::<length::meter>());
         ticker.next().await;
     }
 }
@@ -87,7 +86,7 @@ fn enable_interrupts() {
 }
 
 #[embassy_executor::task]
-async fn blink(mut pin: Pin<PA17, Output<atsamd_hal::gpio::PushPull>>) {
+async fn blink(mut pin: Led) {
     loop {
         pin.toggle();
         Timer::after_millis(500).await;

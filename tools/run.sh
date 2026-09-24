@@ -7,9 +7,17 @@
 #   3. mounts the bootloader volume and copies the UF2 over
 #   4. streams defmt logs in a tmux session attached to this terminal
 #
+# With --no-logs (as used by tools/flash.sh / 'cargo flash') step 4 is skipped.
+#
 # Env overrides: UF2CONV, OBJCOPY, GO_WAIT_TIMEOUT (seconds to wait for the board)
 #
 set -euo pipefail
+
+LOGS=1
+if [[ "${1:-}" == "--no-logs" ]]; then
+    LOGS=0
+    shift
+fi
 
 ELF="${1:?cargo runner called without a binary path}"
 ELF="$(readlink -f "$ELF")"
@@ -34,6 +42,8 @@ UF2="$OUT_DIR/out.uf2"
 LOGFILE="$OUT_DIR/defmt.log"
 LOGGER_SH="$OUT_DIR/defmt-logger.sh"
 
+rm -rf $OUT_DIR/defmt.log
+
 # --- helpers ----------------------------------------------------------------
 die() { echo "run: $*" >&2; exit 1; }
 
@@ -54,6 +64,7 @@ wait_usb() {
 # defmt-print opens the port with TIOCEXCL, so it must let go before we can
 # write 'bootloader' to the same tty.
 stop_logger() {
+    command -v tmux >/dev/null 2>&1 || return 0
     tmux has-session -t "$SESSION" 2>/dev/null || return 0
     tmux send-keys -t "$SESSION:defmt" C-c 2>/dev/null || true
 }
@@ -67,7 +78,11 @@ wait_port_free() {
     done
 }
 
-for tool in "$OBJCOPY" lsusb lsblk udisksctl findmnt rg defmt-print tmux; do
+tools_needed=("$OBJCOPY" lsusb lsblk udisksctl findmnt rg)
+if (( LOGS )); then
+    tools_needed+=(defmt-print tmux)
+fi
+for tool in "${tools_needed[@]}"; do
     command -v "$tool" >/dev/null 2>&1 || die "missing required tool: $tool"
 done
 [[ -r "$UF2CONV" ]] || die "uf2conv.py not found at $UF2CONV (set UF2CONV=...)"
@@ -97,6 +112,13 @@ if have_usb "$APP_ID"; then
     wait_port_free "$tty" 5 || die "$tty is held by another process (defmt-print? screen?)"
 
     echo "run: app mode on $tty, requesting bootloader"
+
+    # A freshly enumerated ttyACM starts in cooked mode with IXON enabled, so a
+    # 0x13 byte in the binary defmt stream is read as XOFF and the kernel stops
+    # sending anything to the board - the command then never arrives. Raw mode
+    # also stops \n being rewritten on the way out.
+    stty -F "$tty" raw -echo -ixon -ixoff 2>/dev/null || true
+
     deadline=$(( SECONDS + 10 ))
     while have_usb "$APP_ID"; do
         (( SECONDS < deadline )) || die "board ignored 'bootloader'; double-tap reset to enter it manually"
@@ -137,7 +159,13 @@ sync || true
 
 # --- 4. stream defmt logs in tmux -------------------------------------------
 wait_usb "$APP_ID" 30 "board to re-enumerate after flashing"
-sleep 0.5   # give udev a moment to create the CDC ACM node
+
+if (( LOGS == 0 )); then
+    echo "run: flashed, board is running (no log session)"
+    exit 0
+fi
+
+sleep 1.5   # let udev create the CDC ACM node and finish probing it
 tty="$(first_tty)"
 [[ -n "$tty" ]] || die "no /dev/ttyACM* after flashing"
 echo "run: flashed, logging from $tty"
@@ -155,11 +183,32 @@ cat > "$LOGGER_SH" <<EOF
 # stdout is a pipe (tee), which makes defmt-print drop its colours, so force
 # them back on and strip the escapes again on the way into the log file.
 export CLICOLOR_FORCE=1
-# C-c stops the logger and closes the whole session, dropping you back to the
-# terminal you ran cargo from. The pane scrollback goes with it; $LOGFILE keeps
-# the full history. Use C-b d instead to leave the logger running.
-trap 'tmux kill-session -t $SESSION 2>/dev/null; exit 130' INT
-defmt-print -e $elf_q serial --path $tty_q 2>&1 | tee >(sed -u 's/\x1b\[[0-9;]*m//g' >> $log_q)
+# C-c stops the logger. If someone is attached and watching, close the whole
+# session too (the pane scrollback goes with it; $LOGFILE keeps everything).
+# If nothing is attached, this SIGINT came from run.sh/flash.sh stopping the
+# logger to free the serial port, so keep the session and its scrollback.
+on_int() {
+    if [ -n "\$(tmux list-clients -t $SESSION 2>/dev/null)" ]; then
+        tmux kill-session -t $SESSION 2>/dev/null
+    fi
+    exit 130
+}
+trap on_int INT
+
+# Just after the board enumerates, something else can still hold the port for a
+# moment (udev probing the new CDC ACM device, or the previous logger exiting),
+# and defmt-print then dies with "Unable to acquire exclusive lock". Treat any
+# exit inside 2s as "not ready yet" and retry for a short while.
+deadline=\$(( SECONDS + 20 ))
+while :; do
+    started=\$SECONDS
+    defmt-print -e $elf_q serial --path $tty_q 2>&1 | tee >(sed -u 's/\x1b\[[0-9;]*m//g' >> $log_q)
+    if (( SECONDS - started < 2 )) && [[ -e $tty_q ]] && (( SECONDS < deadline )); then
+        sleep 0.5
+        continue
+    fi
+    break
+done
 echo "[logger stopped - cargo run to reflash, C-b d to detach]"
 EOF
 chmod +x "$LOGGER_SH"
